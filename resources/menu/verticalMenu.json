@@ -1,0 +1,144 @@
+{
+  "menu": [
+    {
+      "url": "/",
+      "name": "Dashboard",
+      "icon": "menu-icon icon-base bx bx-home-smile",
+      "slug": "dashboard",
+      "permission": "dashboard_view"
+    },
+    {
+      "url": "/my-connection",
+      "name": "Koneksi Saya",
+      "icon": "menu-icon icon-base bx bx-wifi",
+      "slug": "my-connection"
+    },
+    {
+      "menuHeader": "Manajemen Data",
+      "permission": "pelanggan_manage"
+    },
+    {
+      "url": "/pelanggan",
+      "name": "Data Pelanggan",
+      "icon": "menu-icon icon-base bx bx-user",
+      "slug": "pelanggan",
+      "permission": "pelanggan_manage"
+    },
+    {
+      "url": "/map-pelanggan",
+      "name": "Web GIS Pelanggan",
+      "icon": "menu-icon icon-base bx bx-map-alt",
+      "slug": "pelanggan-map",
+      "permission": "pelanggan_manage"
+    },
+    {
+      "menuHeader": "Analisis & Optimasi",
+      "permission": "knn_process"
+    },
+    {
+      "url": "/knn",
+      "name": "Klasifikasi Prioritas",
+      "icon": "menu-icon icon-base bx bx-brain",
+      "slug": "knn",
+      "permission": "knn_process"
+    },
+    {
+      "url": "/rute",
+      "name": "Optimasi Rute",
+      "icon": "menu-icon icon-base bx bx-navigation",
+      "slug": "rute",
+      "permission": "rute_manage"
+    },
+    {
+      "menuHeader": "Operasional"
+    },
+    {
+      "url": "/tiket",
+      "name": "Tiket Gangguan",
+      "icon": "menu-icon icon-base bx bx-error-circle",
+      "slug": "tiket",
+      "permission": "tiket_manage"
+    },
+    {
+      "url": "/scan",
+      "name": "Scan QR / Barcode",
+      "icon": "menu-icon icon-base bx bx-qr-scan",
+      "slug": "scan",
+      "permission": "mikrotik_monitor"
+    },
+    {
+      "url": "/mikrotik",
+      "name": "Monitoring Mikrotik",
+      "icon": "menu-icon icon-base bx bx-server",
+      "slug": "mikrotik",
+      "permission": "mikrotik_monitor"
+    },
+    {
+      "url": "/inventory",
+      "name": "Inventaris Alat",
+      "icon": "menu-icon icon-base bx bx-wrench",
+      "slug": "inventory",
+      "permission": "inventory_manage"
+    },
+    {
+      "menuHeader": "Keuangan"
+    },
+    {
+      "url": "/billing",
+      "name": "Daftar Tagihan",
+      "icon": "menu-icon icon-base bx bx-wallet",
+      "slug": "billing",
+      "permission": "billing_view"
+    },
+    {
+      "url": "/settings/payment",
+      "name": "Set Pembayaran",
+      "icon": "menu-icon icon-base bx bx-cog",
+      "slug": "settings-payment",
+      "permission": "user_manage"
+    },
+    {
+      "menuHeader": "Sistem",
+      "permission": "user_manage"
+    },
+    {
+      "url": "/users",
+      "name": "Manajemen Pengguna",
+      "icon": "menu-icon icon-base bx bx-group",
+      "slug": "users",
+      "permission": "user_manage"
+    },
+    {
+      "url": "/bot/responses",
+      "name": "Auto Responder Bot",
+      "icon": "menu-icon icon-base bx bx-message-rounded-dots",
+      "slug": "bot",
+      "permission": "user_manage"
+    },
+    {
+      "url": "/whatsapp/manager",
+      "name": "WhatsApp Multi-Device",
+      "icon": "menu-icon icon-base bx bxl-whatsapp",
+      "slug": "whatsapp-manager",
+      "permission": "user_manage"
+    },
+    {
+      "name": "Laporan",
+      "icon": "menu-icon icon-base bx bx-chart",
+      "slug": "laporan",
+      "permission": "report_view",
+      "submenu": [
+        {
+          "url": "/laporan",
+          "name": "Statistik Gangguan",
+          "slug": "laporan.index"
+        },
+        {
+          "url": "/laporan/tagihan",
+          "name": "Laporan Keuangan",
+          "slug": "laporan.tagihan"
+        }
+      ]
+    }
+  ]
+}

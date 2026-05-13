@@ -1,0 +1,77 @@
+<?php
+
+namespace App\Console\Commands;
+
+use Illuminate\Console\Command;
+
+class GenerateMonthlyBills extends Command
+{
+    /**
+     * The name and signature of the console command.
+     *
+     * @var string
+     */
+    protected $signature = 'billing:generate';
+
+    /**
+     * The console command description.
+     *
+     * @var string
+     */
+    protected $description = 'Generate monthly bills for all active customers';
+
+    /**
+     * Execute the console command.
+     */
+    public function handle()
+    {
+        $genDate = (int) \App\Models\Setting::get('billing_generate_date', '1');
+        
+        if (now()->day != $genDate) {
+            $this->info("Today is " . now()->day . ". Bill generation is scheduled for day {$genDate}. Skipping...");
+            return;
+        }
+
+        $this->info('Starting bill generation...');
+        $currentMonth = now()->month;
+        $currentYear = now()->year;
+
+        $pelanggans = \App\Models\Pelanggan::where('is_active', true)->get();
+        $generatedCount = 0;
+
+        $waClient = new \App\Services\WhatsappClient();
+        foreach ($pelanggans as $p) {
+            $exists = \App\Models\Tagihan::where('id_pelanggan', $p->id_pelanggan)
+                ->where('bulan', $currentMonth)
+                ->where('tahun', $currentYear)
+                ->exists();
+
+            if (!$exists && $p->harga_layanan > 0) {
+                $tagihan = \App\Models\Tagihan::create([
+                    'id_pelanggan' => $p->id_pelanggan,
+                    'bulan' => $currentMonth,
+                    'tahun' => $currentYear,
+                    'jumlah' => $p->harga_layanan,
+                    'status' => 'unpaid',
+                ]);
+                $generatedCount++;
+
+                // Kirim Notifikasi WA
+                if ($p->no_wa) {
+                    $monthName = date('F', mktime(0, 0, 0, $currentMonth, 10));
+                    $message = "🔔 *PEMBERITAHUAN TAGIHAN BARU*\n\n";
+                    $message .= "Halo " . $p->nama_pelanggan . ",\n";
+                    $message .= "Tagihan internet Anda untuk periode *" . $monthName . " " . $currentYear . "* telah terbit.\n\n";
+                    $message .= "Jumlah: *Rp " . number_format($p->harga_layanan) . "*\n";
+                    $message .= "Status: *BELUM BAYAR*\n\n";
+                    $message .= "Silakan lakukan pembayaran sebelum tanggal " . \App\Models\Setting::get('billing_isolir_date', '10') . " agar layanan tidak terisolir otomatis.\n";
+                    $message .= "Anda dapat mengecek detail tagihan dengan membalas pesan ini ketik: *Cek Tagihan*";
+
+                    $waClient->sendMessage($p->no_wa, ['text' => $message]);
+                }
+            }
+        }
+
+        $this->info("Successfully generated $generatedCount bills and sent notifications for $currentMonth/$currentYear.");
+    }
+}
