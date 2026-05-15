@@ -6,6 +6,7 @@ use App\Models\Pelanggan;
 use App\Models\Teknisi;
 use App\Models\Rute;
 use App\Models\RuteDetail;
+use App\Models\OdcOdp;
 use App\Services\RouteOptimizationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -73,7 +74,8 @@ class RuteController extends Controller
     public function show(Rute $rute)
     {
         $rute->load(['teknisi', 'details.pelanggan']);
-        return view('content.rute.show', compact('rute'));
+        $odc_odp = OdcOdp::all();
+        return view('content.rute.show', compact('rute', 'odc_odp'));
     }
 
     public function updateDetailStatus(Request $request, RuteDetail $detail)

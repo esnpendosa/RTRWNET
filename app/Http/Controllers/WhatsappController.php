@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
 use App\Models\WhatsappTraining;
 use App\Models\BotResponse;
+use App\Models\OdcOdp;
 use Illuminate\Support\Str;
 
 
@@ -111,7 +112,7 @@ class WhatsappController extends Controller
             }
         }
 
-        if (!$isGroup || $isMentioned) {
+        if (true) { // Berfungsi di grup maupun chat pribadi
             // AI Fallback
             $aiReply = $this->getAiResponse($message, $remoteJid, $request->pushName ?? 'Pelanggan');
             if ($aiReply) {
@@ -119,13 +120,11 @@ class WhatsappController extends Controller
                 return response()->json(['reply' => $aiReply]);
             }
 
-            // Default Fallback (only for private chats)
-            if (!$isGroup) {
-                $fallback = \App\Models\BotResponse::where('keyword', 'like', '%default%')->where('is_active', true)->first();
-                $reply = $fallback ? $this->formatForWhatsapp($fallback->response) : "🤖 *RT RW NET BOT*\nKetik *menu* untuk melihat bantuan.";
-                $this->saveBotReply($remoteJid, $reply);
-                return response()->json(['reply' => $reply]);
-            }
+            // Default Fallback
+            $fallback = \App\Models\BotResponse::where('keyword', 'like', '%default%')->where('is_active', true)->first();
+            $reply = $fallback ? $this->formatForWhatsapp($fallback->response) : "🤖 *RT RW NET BOT*\nKetik *menu* untuk melihat bantuan.";
+            $this->saveBotReply($remoteJid, $reply);
+            return response()->json(['reply' => $reply]);
         }
 
         // If it's a group and no keyword matched and not mentioned, stay silent
@@ -260,53 +259,108 @@ class WhatsappController extends Controller
 
     private function handleLokasiCommand($query, $remoteJid, $mode = 'gis')
     {
-        // 1. Prioritaskan pencarian EXACT pada Kode Pelanggan
-        $exactMatch = Pelanggan::where('kode_pelanggan', $query)
-            ->orWhere('kode_pelanggan', strtoupper($query))
-            ->first();
+        $originalQuery = $query;
+        $query = strtolower(trim($query));
+        $typeFilter = null;
 
-        if ($exactMatch) {
-            $p = $exactMatch;
-            if ($mode === 'url') {
-                if (!$p->maps_url) return response()->json(['reply' => "📍 Pelanggan *{$p->nama_pelanggan}* ({$p->kode_pelanggan}) ditemukan, tapi Link Google Maps belum diinput."]);
-                $reply = "📍 *Lokasi Pelanggan (Manual Link)*\n\nNama: *{$p->nama_pelanggan}*\nKode: *{$p->kode_pelanggan}*\nAlamat: {$p->alamat}\n\n🗺️ *Google Maps:*\n{$p->maps_url}";
-                return response()->json(['reply' => $reply]);
-            } else {
-                if (!$p->latitude || !$p->longitude) return response()->json(['reply' => "📍 Pelanggan *{$p->nama_pelanggan}* ({$p->kode_pelanggan}) ditemukan, tapi koordinat GIS belum ada."]);
+        // Deteksi jika user mengetik "odp [nama]" atau "odc [nama]"
+        if (str_starts_with($query, 'odp ')) {
+            $typeFilter = 'ODP';
+            $query = trim(substr($query, 4));
+        } elseif (str_starts_with($query, 'odc ')) {
+            $typeFilter = 'ODC';
+            $query = trim(substr($query, 4));
+        }
+
+        // 1. Prioritaskan pencarian EXACT pada Kode Pelanggan (Hanya jika tidak ada filter ODC/ODP)
+        if (!$typeFilter) {
+            $exactPelanggan = Pelanggan::where('kode_pelanggan', $query)
+                ->orWhere('kode_pelanggan', strtoupper($query))
+                ->first();
+
+            if ($exactPelanggan) {
+                $p = $exactPelanggan;
                 $mapsUrl = "https://www.google.com/maps?q={$p->latitude},{$p->longitude}";
                 $reply = "📍 *Lokasi Pelanggan (GIS)*\n\nNama: *{$p->nama_pelanggan}*\nKode: *{$p->kode_pelanggan}*\nAlamat: {$p->alamat}\n\n🗺️ *Google Maps:*\n$mapsUrl";
+                $this->saveBotReply($remoteJid, $reply);
                 return response()->json(['reply' => $reply]);
             }
         }
 
-        // 2. Jika tidak ada yang exact, baru cari partial (seperti sebelumnya)
-        $results = Pelanggan::where('nama_pelanggan', 'like', "%$query%")
-            ->orWhere('kode_pelanggan', 'like', "%$query%")
-            ->orWhere('mikrotik_username', 'like', "%$query%")
-            ->limit(5)->get();
+        // 2. Pencarian EXACT pada ODC/ODP
+        $queryOdc = OdcOdp::query();
+        if ($typeFilter) $queryOdc->where('tipe', $typeFilter);
+        
+        $exactOdc = $queryOdc->where(function($q) use ($query) {
+            $q->where('nama', $query)
+              ->orWhere('nama', strtoupper($query))
+              ->orWhere('nama', 'like', "%-$query") // ODP-AD-20
+              ->orWhere('nama', str_replace(' ', '-', $query)) // odp-ad20 -> odp-ad-20
+              ->orWhere('nama', str_replace(' ', '', $query));
+        })->first();
 
-        if ($results->isEmpty()) return response()->json(['reply' => "❌ Tidak ada pelanggan yang cocok dengan *$query*."]);
+        if ($exactOdc) {
+            $item = $exactOdc;
+            $mapsUrl = "https://www.google.com/maps?q={$item->latitude},{$item->longitude}";
+            $reply = "🏗️ *Lokasi Infrastruktur ({$item->tipe})*\n\nNama: *{$item->nama}*\nTipe: *{$item->tipe}*\nDeskripsi: {$item->deskripsi}\n\n🗺️ *Google Maps:*\n$mapsUrl";
+            $this->saveBotReply($remoteJid, $reply);
+            return response()->json(['reply' => $reply]);
+        }
 
-        if ($results->count() === 1) {
-            $p = $results->first();
-            // ... (sama seperti logika exact di atas, bisa di-refactor jika perlu, tapi biarkan dulu agar aman)
-            if ($mode === 'url') {
-                if (!$p->maps_url) return response()->json(['reply' => "📍 Pelanggan *{$p->nama_pelanggan}* ditemukan, tapi Link Google Maps belum diinput."]);
-                $reply = "📍 *Lokasi Pelanggan (Manual Link)*\n\nNama: *{$p->nama_pelanggan}*\nKode: *{$p->kode_pelanggan}*\nAlamat: {$p->alamat}\n\n🗺️ *Google Maps:*\n{$p->maps_url}";
+        // 3. Pencarian Partial
+        $resPelanggan = collect();
+        if (!$typeFilter) {
+            $resPelanggan = Pelanggan::where('nama_pelanggan', 'like', "%$query%")
+                ->orWhere('kode_pelanggan', 'like', "%$query%")
+                ->limit(5)->get();
+        }
+
+        $queryPartialOdc = OdcOdp::query();
+        if ($typeFilter) $queryPartialOdc->where('tipe', $typeFilter);
+        $resOdc = $queryPartialOdc->where('nama', 'like', "%$query%")->limit(5)->get();
+
+        if ($resPelanggan->isEmpty() && $resOdc->isEmpty()) {
+            $reply = "❌ Tidak ada pelanggan atau infrastruktur yang cocok dengan *$originalQuery*.";
+            $this->saveBotReply($remoteJid, $reply);
+            return response()->json(['reply' => $reply]);
+        }
+
+        // Jika hanya 1 hasil total
+        if ($resPelanggan->count() + $resOdc->count() === 1) {
+            if ($resPelanggan->isNotEmpty()) {
+                $p = $resPelanggan->first();
+                $mapsUrl = "https://www.google.com/maps?q={$p->latitude},{$p->longitude}";
+                $reply = "📍 *Lokasi Pelanggan*\n\nNama: *{$p->nama_pelanggan}*\nKode: *{$p->kode_pelanggan}*\n\n🗺️ *Google Maps:*\n$mapsUrl";
+                $this->saveBotReply($remoteJid, $reply);
                 return response()->json(['reply' => $reply]);
             } else {
-                if (!$p->latitude || !$p->longitude) return response()->json(['reply' => "📍 Pelanggan *{$p->nama_pelanggan}* ditemukan, tapi koordinat GIS belum ada."]);
-                $mapsUrl = "https://www.google.com/maps?q={$p->latitude},{$p->longitude}";
-                $reply = "📍 *Lokasi Pelanggan (GIS)*\n\nNama: *{$p->nama_pelanggan}*\nKode: *{$p->kode_pelanggan}*\nAlamat: {$p->alamat}\n\n🗺️ *Google Maps:*\n$mapsUrl";
+                $item = $resOdc->first();
+                $mapsUrl = "https://www.google.com/maps?q={$item->latitude},{$item->longitude}";
+                $reply = "🏗️ *Lokasi Infrastruktur ({$item->tipe})*\n\nNama: *{$item->nama}*\n\n🗺️ *Google Maps:*\n$mapsUrl";
+                $this->saveBotReply($remoteJid, $reply);
                 return response()->json(['reply' => $reply]);
             }
         }
 
-        $reply = "🔍 *Hasil Pencarian: \"$query\"*\n\n";
-        foreach ($results as $i => $p) {
-            $hasLok = ($p->latitude && $p->longitude) ? '✅' : '❌';
-            $reply .= ($i + 1) . ". *{$p->nama_pelanggan}* ({$p->kode_pelanggan}) $hasLok\n";
+        // Jika banyak hasil, tampilkan list
+        $reply = "🔍 *Hasil Pencarian: \"$originalQuery\"*\n\n";
+        if ($resPelanggan->isNotEmpty()) {
+            $reply .= "*--- Pelanggan ---*\n";
+            foreach ($resPelanggan as $p) {
+                $hasLok = ($p->latitude && $p->longitude) ? '✅' : '❌';
+                $reply .= "• *{$p->nama_pelanggan}* ({$p->kode_pelanggan}) $hasLok\n";
+            }
+            $reply .= "\n";
         }
+        if ($resOdc->isNotEmpty()) {
+            $reply .= "*--- Infrastruktur ---*\n";
+            foreach ($resOdc as $item) {
+                $reply .= "• [{$item->tipe}] *{$item->nama}* ✅\n";
+            }
+        }
+        $reply .= "\n_Ketik nama yang lebih spesifik jika ingin langsung mendapatkan link lokasi._";
+        
+        $this->saveBotReply($remoteJid, $reply);
         return response()->json(['reply' => $reply]);
     }
 
@@ -377,10 +431,10 @@ class WhatsappController extends Controller
                 // Normalize keys (handle both camelCase and snake_case)
                 $remoteJid = $m['remote_jid'] ?? $m['remoteJid'] ?? null;
 
-                // Abaikan pesan grup untuk training data
-                if ($remoteJid && str_contains($remoteJid, '@g.us')) {
-                    continue;
-                }
+                /* Simpan pesan grup untuk training data AI context */
+                // if ($remoteJid && str_contains($remoteJid, '@g.us')) {
+                //     continue;
+                // }
 
                 $messageContent = $m['message'] ?? null;
                 $isFromMe = $m['is_from_me'] ?? $m['isFromMe'] ?? false;
@@ -455,6 +509,12 @@ class WhatsappController extends Controller
             ->get()
             ->reverse();
 
+        // Load Dynamic Network Stats (REALTIME from DB)
+        $pelangganCount = Pelanggan::count();
+        $odcCount = OdcOdp::where('tipe', 'ODC')->count();
+        $odpCount = OdcOdp::where('tipe', 'ODP')->count();
+        $networkSummary = "DATA JARINGAN REALTIME:\n- Total Pelanggan: $pelangganCount\n- Total ODC: $odcCount\n- Total ODP: $odpCount\n\nJika pelanggan tanya lokasi, sarankan ketik 'lok [nama]' atau 'lokasi [nama]'.";
+
         $adminNum = env('WHATSAPP_ADMIN_NUMBER', '6282187827382');
         $systemInstruction = "Anda adalah R-Care, Customer Service AI resmi dari Rozitech (https://rozitech.co.id).
         Tugas Anda adalah melayani pelanggan Rozitech Network (Layanan Internet/WiFi).
@@ -471,6 +531,9 @@ class WhatsappController extends Controller
 
         KONTEKS BISNIS & SOP:
         $sopContent
+
+        DATA JARINGAN REALTIME:
+        $networkSummary
 
         PENGETAHUAN TAMBAHAN (Database):
         $dynamicBotData

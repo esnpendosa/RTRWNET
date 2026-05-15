@@ -12,6 +12,7 @@ use App\Http\Controllers\LaporanController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\ScanController;
+use App\Http\Controllers\OdcOdpController;
 use App\Http\Controllers\authentications\LoginBasic;
 
 // Auth Routes (Using template's basic login for now)
@@ -35,6 +36,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/pelanggan/export', [PelangganController::class, 'export'])->name('pelanggan.export');
         Route::get('/pelanggan/{pelanggan}/card', [PelangganController::class, 'card'])->name('pelanggan.card');
         Route::resource('pelanggan', PelangganController::class);
+        Route::resource('odc-odp', OdcOdpController::class);
         Route::post('pelanggan-import', [PelangganController::class, 'import'])->name('pelanggan.import');
         Route::get('map-pelanggan', [PelangganController::class, 'map'])->name('pelanggan.map');
         Route::post('pelanggan/{pelanggan}/toggle-status', [PelangganController::class, 'toggleStatus'])->name('pelanggan.toggle-status');

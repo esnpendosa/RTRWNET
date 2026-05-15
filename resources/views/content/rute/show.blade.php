@@ -54,11 +54,17 @@
     </div>
     <div class="col-md-8">
         <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">Visualisasi Rute (Leaflet Polyline)</h5>
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Visualisasi Rute & Titik Jaringan (ODC/ODP)</h5>
+                <div class="legend small">
+                    <span class="badge bg-primary">Kantor</span>
+                    <span class="badge bg-danger">Pelanggan</span>
+                    <span class="badge bg-warning text-dark">ODC</span>
+                    <span class="badge bg-success">ODP</span>
+                </div>
             </div>
             <div class="card-body">
-                <div id="map" style="height: 500px; border-radius: 8px;"></div>
+                <div id="map" style="height: 600px; border-radius: 8px;"></div>
             </div>
         </div>
     </div>
@@ -66,6 +72,40 @@
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+<style>
+    /* CSS Animation for ODC/ODP */
+    .pulse-animation {
+        border-radius: 50%;
+        box-shadow: 0 0 0 0 rgba(255, 165, 0, 0.7);
+        animation: pulse 2s infinite;
+    }
+    
+    .pulse-odp {
+        box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
+        animation: pulse-green 2s infinite;
+    }
+
+    @keyframes pulse {
+        0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 165, 0, 0.7); }
+        70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(255, 165, 0, 0); }
+        100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 165, 0, 0); }
+    }
+
+    @keyframes pulse-green {
+        0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7); }
+        70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(40, 167, 69, 0); }
+        100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); }
+    }
+
+    .popup-photo {
+        width: 100%;
+        height: 120px;
+        object-fit: cover;
+        border-radius: 4px;
+        margin-top: 8px;
+    }
+</style>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
 
@@ -74,7 +114,7 @@
         var baseLat = {{ $rute->titik_awal_lat }};
         var baseLng = {{ $rute->titik_awal_lng }};
         
-        var map = L.map('map').setView([baseLat, baseLng], 14);
+        var map = L.map('map').setView([baseLat, baseLng], 15);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
         var waypoints = [];
@@ -88,18 +128,52 @@
             })
         }).addTo(map).bindPopup("<b>Kantor CV. ROZITECH</b>");
 
+        // Render Pelanggan
         var details = @json($rute->details->load('pelanggan'));
         details.forEach(function(d) {
             var p = L.latLng(d.pelanggan.latitude, d.pelanggan.longitude);
             waypoints.push(p);
             
             L.circleMarker([d.pelanggan.latitude, d.pelanggan.longitude], {
-                radius: 10, 
+                radius: 8, 
                 fillColor: 'red', 
                 color: '#fff', 
                 weight: 2, 
                 fillOpacity: 1
             }).addTo(map).bindPopup("<b>" + d.urutan + ". " + d.pelanggan.nama_pelanggan + "</b><br>" + d.pelanggan.alamat);
+        });
+
+        // Render ODC & ODP with Animations & Photos
+        var odcOdpData = @json($odc_odp);
+        odcOdpData.forEach(function(item) {
+            var iconClass = item.tipe === 'ODC' ? 'pulse-animation' : 'pulse-odp';
+            var iconUrl = item.tipe === 'ODC' 
+                ? 'https://cdn-icons-png.flaticon.com/512/2885/2885417.png' // ODC Icon
+                : 'https://cdn-icons-png.flaticon.com/512/944/944455.png';  // ODP Icon
+            
+            var customIcon = L.divIcon({
+                className: iconClass,
+                html: `<img src="${iconUrl}" style="width:24px;height:24px;">`,
+                iconSize: [24, 24],
+                iconAnchor: [12, 12]
+            });
+
+            var photoHtml = item.foto ? `<img src="${item.foto}" class="popup-photo">` : '';
+            
+            L.marker([item.latitude, item.longitude], { icon: customIcon })
+                .addTo(map)
+                .bindPopup(`
+                    <div style="width:200px">
+                        <span class="badge ${item.tipe === 'ODC' ? 'bg-warning text-dark' : 'bg-success'} mb-1">${item.tipe}</span>
+                        <h6 class="mb-1">${item.nama}</h6>
+                        <p class="small text-muted mb-0">${item.deskripsi || ''}</p>
+                        ${photoHtml}
+                        <div class="mt-2">
+                            <small>Lat: ${item.latitude}</small><br>
+                            <small>Lng: ${item.longitude}</small>
+                        </div>
+                    </div>
+                `);
         });
 
         // Road-Following Route
@@ -116,7 +190,6 @@
                 createMarker: function() { return null; }
             }).addTo(map);
 
-            // Hide the routing container for clean look
             setTimeout(function() {
                 var container = document.querySelector('.leaflet-routing-container');
                 if (container) container.style.display = 'none';

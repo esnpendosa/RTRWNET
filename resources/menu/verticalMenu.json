@@ -32,6 +32,13 @@
       "permission": "pelanggan_manage"
     },
     {
+      "url": "/odc-odp",
+      "name": "Titik ODC & ODP",
+      "icon": "menu-icon icon-base bx bx-layer",
+      "slug": "odc-odp",
+      "permission": "pelanggan_manage"
+    },
+    {
       "menuHeader": "Analisis & Optimasi",
       "permission": "knn_process"
     },
@@ -98,8 +105,7 @@
       "permission": "user_manage"
     },
     {
-      "menuHeader": "Sistem",
-      "permission": "user_manage"
+      "menuHeader": "Sistem"
     },
     {
       "url": "/users",
