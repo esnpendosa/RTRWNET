@@ -426,4 +426,64 @@ class MikrotikService
             return [];
         }
     }
+
+    public function setSecretStatus(Router $router, $username, $type, $disable, $ip = null)
+    {
+        try {
+            $client = $this->getConnection($router);
+            if (!$client) return false;
+
+            // 1. Update status secret (Enable/Disable)
+            if ($type === 'pppoe') {
+                $query = new Query('/ppp/secret/print');
+                $query->equal('name', $username);
+                $resp = $client->query($query)->read();
+                if (!empty($resp)) {
+                    $id = $resp[0]['.id'];
+                    $client->query((new Query('/ppp/secret/set'))->equal('.id', $id)->equal('disabled', $disable ? 'yes' : 'no'))->read();
+                }
+            } elseif ($type === 'hotspot') {
+                $query = new Query('/ip/hotspot/user/print');
+                $query->equal('name', $username);
+                $resp = $client->query($query)->read();
+                if (!empty($resp)) {
+                    $id = $resp[0]['.id'];
+                    $client->query((new Query('/ip/hotspot/user/set'))->equal('.id', $id)->equal('disabled', $disable ? 'yes' : 'no'))->read();
+                }
+            } elseif ($type === 'static' && $ip) {
+                // Untuk static, isolir biasanya dengan disable queue simple
+                $query = new Query('/queue/simple/print');
+                $query->equal('target', $ip . '/32');
+                $resp = $client->query($query)->read();
+                if (!empty($resp)) {
+                    $id = $resp[0]['.id'];
+                    $client->query((new Query('/queue/simple/set'))->equal('.id', $id)->equal('disabled', $disable ? 'yes' : 'no'))->read();
+                }
+            }
+
+            // 2. Tendang sesi aktif jika di-disable agar koneksi terputus saat itu juga
+            if ($disable) {
+                if ($type === 'pppoe') {
+                    $query = new Query('/ppp/active/print');
+                    $query->equal('name', $username);
+                    $resp = $client->query($query)->read();
+                    if (!empty($resp)) {
+                        $client->query((new Query('/ppp/active/remove'))->equal('.id', $resp[0]['.id']))->read();
+                    }
+                } elseif ($type === 'hotspot') {
+                    $query = new Query('/ip/hotspot/active/print');
+                    $query->equal('user', $username);
+                    $resp = $client->query($query)->read();
+                    if (!empty($resp)) {
+                        $client->query((new Query('/ip/hotspot/active/remove'))->equal('.id', $resp[0]['.id']))->read();
+                    }
+                }
+            }
+
+            return true;
+        } catch (Exception $e) {
+            \Log::error("Mikrotik setSecretStatus Error: " . $e->getMessage());
+            return false;
+        }
+    }
 }

@@ -428,6 +428,20 @@ class WhatsappController extends Controller
 
         if ($amountMatched && $hasSuccessKeyword) {
             $tagihan->update(['status' => 'paid', 'paid_at' => now(), 'metode_pembayaran' => 'otomatis']);
+            
+            // Auto Re-Enable Layanan (Un-Isolir)
+            $pelanggan = $tagihan->pelanggan;
+            if ($pelanggan && $pelanggan->id_router) {
+                $pelanggan->update(['is_active' => true]);
+                try {
+                    $mikrotik = app(\App\Services\MikrotikService::class);
+                    $mUser = $pelanggan->mikrotik_username ?: $pelanggan->kode_pelanggan;
+                    $mikrotik->setSecretStatus($pelanggan->router, $mUser, $pelanggan->mikrotik_type, false, $pelanggan->ip_address);
+                } catch (\Exception $e) {
+                    \Log::error("Gagal un-isolir otomatis: " . $e->getMessage());
+                }
+            }
+
             try {
                 $waClient = new \App\Services\WhatsappClient();
                 $waClient->sendReceipt($tagihan);
