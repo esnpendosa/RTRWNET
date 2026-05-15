@@ -113,23 +113,19 @@ class WhatsappClient
         
         $fileUrl = asset('storage/' . $storagePath);
 
-        if ($isManual) {
-            $caption = "✅ *PEMBAYARAN DIVERIFIKASI ADMIN*\n\n";
-            $caption .= "Halo *{$pelanggan->nama_pelanggan}*,\n";
-            $caption .= "Tagihan Anda untuk periode *{$monthName} {$tagihan->tahun}* sebesar *Rp {$amount}* telah berhasil diverifikasi oleh Admin.\n\n";
-        } else {
-            $caption = "✅ *VERIFIKASI OTOMATIS BERHASIL*\n\n";
-            $caption .= "Halo *{$pelanggan->nama_pelanggan}*,\n";
-            $caption .= "Pembayaran Anda untuk periode *{$monthName} {$tagihan->tahun}* sebesar *Rp {$amount}* telah berhasil diverifikasi secara otomatis.\n\n";
-        }
+        $monthIndo = [
+            'January' => 'Januari', 'February' => 'Februari', 'March' => 'Maret', 
+            'April' => 'April', 'May' => 'Mei', 'June' => 'Juni', 
+            'July' => 'Juli', 'August' => 'Agustus', 'September' => 'September', 
+            'October' => 'Oktober', 'November' => 'November', 'December' => 'Desember'
+        ];
+        $monthNameIndo = $monthIndo[$monthName] ?? $monthName;
+        $amountK = round($tagihan->jumlah / 1000);
 
-        $caption .= "*Status:* LUNAS\n";
-        $caption .= "*Waktu Bayar:* {$paidAt}\n\n";
-        $caption .= "Layanan internet Anda telah aktif sepenuhnya. Berikut kami lampirkan *Nota Pembayaran Digital (PDF)* sebagai bukti pembayaran yang sah.\n\n";
-        $caption .= "Terima kasih telah berlangganan! 🙏";
+        $caption = "Terima kasih pelanggan *{$pelanggan->kode_pelanggan}* atas pembayaran tagihan internet periode *{$monthNameIndo}* sebesar *{$amountK} ribu*. Semoga segala urusan juga rezekinya senantiasa dimudahkan dan dilancarkan selalu. Aamiin";
 
-        // Try sending via URL first
-        return $this->sendFileUrl($pelanggan->no_wa, $fileUrl, $filename, 'application/pdf', $caption);
+        // Send via Base64 for better reliability
+        return $this->sendFile($pelanggan->no_wa, $pdfContent, $filename, 'application/pdf', $caption);
     }
 
     public function getSessions()

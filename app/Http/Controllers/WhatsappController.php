@@ -48,8 +48,8 @@ class WhatsappController extends Controller
         // 1. Logic for Ping/Cek/Lokasi (Hardcoded Commands)
         $lowerMsg = strtolower($message);
         
-        // Cek PING/CEK
-        if (str_starts_with($lowerMsg, 'ping') || str_starts_with($lowerMsg, 'cek ')) {
+        // Cek PING/CEK (Kecuali 'cek tagihan')
+        if ((str_starts_with($lowerMsg, 'ping') || str_starts_with($lowerMsg, 'cek ')) && !str_starts_with($lowerMsg, 'cek tagihan')) {
             $targetStr = trim(str_ireplace(['ping', 'cek id ', 'cek '], '', $message));
             if (!empty($targetStr) && strlen($targetStr) <= 25) {
                 return $this->handlePingCommand($targetStr, $remoteJid, $cleanPhone);
@@ -96,7 +96,8 @@ class WhatsappController extends Controller
         }
 
         // 3. Logic for Image (Proof of payment)
-        if ($type == 'image' && $request->has('media')) {
+        $isImage = ($type == 'image' || $type == 'imageMessage' || $request->has('media'));
+        if ($isImage && $request->has('media')) {
             return $this->handleImageVerification($request, $remoteJid, $message);
         }
 
@@ -112,17 +113,22 @@ class WhatsappController extends Controller
             }
         }
 
-        if (true) { // Berfungsi di grup maupun chat pribadi
-            // AI Fallback
-            $aiReply = $this->getAiResponse($message, $remoteJid, $request->pushName ?? 'Pelanggan');
-            if ($aiReply) {
-                $this->saveBotReply($remoteJid, $aiReply);
-                return response()->json(['reply' => $aiReply]);
+        // Jika di Grup: Hanya balas jika di-mention
+        // Jika di Chat Pribadi: Selalu balas (AI atau Default)
+        if (!$isGroup || ($isGroup && $isMentioned)) {
+            // AI Fallback (Hanya jika diaktifkan di .env)
+            if (env('WHATSAPP_AI_ENABLED', true)) {
+                $aiReply = $this->getAiResponse($message, $remoteJid, $request->pushName ?? 'Pelanggan');
+                if ($aiReply) {
+                    $this->saveBotReply($remoteJid, $aiReply);
+                    return response()->json(['reply' => $aiReply]);
+                }
             }
 
-            // Default Fallback
+            // Default Fallback dari Database
             $fallback = \App\Models\BotResponse::where('keyword', 'like', '%default%')->where('is_active', true)->first();
             $reply = $fallback ? $this->formatForWhatsapp($fallback->response) : "🤖 *RT RW NET BOT*\nKetik *menu* untuk melihat bantuan.";
+            
             $this->saveBotReply($remoteJid, $reply);
             return response()->json(['reply' => $reply]);
         }
@@ -136,27 +142,51 @@ class WhatsappController extends Controller
      */
     private function findKeywordResponse($message, $isGroup)
     {
-        $botResponses = \App\Models\BotResponse::where('is_active', true)->get()->sort(function($a, $b) {
-            if ($a->is_exact_match != $b->is_exact_match) return $b->is_exact_match <=> $a->is_exact_match;
-            return strlen($b->keyword) <=> strlen($a->keyword);
-        });
+        if (empty($message)) return null;
+
+        $botResponses = \App\Models\BotResponse::where('is_active', true)
+            ->where(function($q) use ($isGroup) {
+                if ($isGroup) {
+                    $q->where('group_enabled', true)->orWhere('keyword', 'like', '%default%');
+                }
+            })
+            ->get();
+
+        $bestMatch = null;
+        $highestSimilarity = 0;
 
         foreach ($botResponses as $bot) {
             $keywords = array_filter(array_map('trim', explode(',', strtolower($bot->keyword))));
             
             foreach ($keywords as $kw) {
-                if ($bot->is_exact_match) {
-                    if ($message === $kw) return $bot;
-                } else {
-                    if (strlen($kw) <= 2) {
+                // 1. Exact Match
+                if ($message === $kw) return $bot;
+
+                // 2. Exact Match in exact match mode
+                if ($bot->is_exact_match && $message === $kw) return $bot;
+
+                if (!$bot->is_exact_match) {
+                    // 3. Word Boundary Match (Better for matching words in sentences)
+                    if (strlen($kw) >= 3) {
                         if (preg_match('/\b' . preg_quote($kw, '/') . '\b/i', $message)) return $bot;
-                    } else {
-                        if (str_contains($message, $kw)) return $bot;
+                    }
+                    
+                    // 4. Case-insensitive Exact Match for short keywords
+                    if (strlen($kw) < 3 && $message === $kw) return $bot;
+
+                    // 5. Fuzzy Match (Levenshtein) - Only for short messages to avoid false positives
+                    if (strlen($message) < 20 && strlen($kw) > 3) {
+                        $sim = 0;
+                        similar_text($message, $kw, $sim);
+                        if ($sim > 85 && $sim > $highestSimilarity) {
+                            $highestSimilarity = $sim;
+                            $bestMatch = $bot;
+                        }
                     }
                 }
             }
         }
-        return null;
+        return $bestMatch;
     }
 
     private function handlePingCommand($targetStr, $remoteJid, $cleanPhone)
@@ -378,19 +408,36 @@ class WhatsappController extends Controller
         file_put_contents(storage_path('app/public/bukti_bayar/' . $fileName), $imageData);
         $tagihan->update(['bukti_bayar' => 'bukti_bayar/' . $fileName]);
 
-        // OCR logic simplified for brevity but functional
-        $ocrText = $request->ocrText ?? '';
+        // OCR logic improved
+        $ocrText = strtolower($request->ocrText ?? '');
+        $cleanOcr = preg_replace('/[^0-9]/', '', $ocrText);
         $targetAmount = (string)((int)$tagihan->jumlah);
-        if (str_contains(preg_replace('/[^0-9]/', '', $ocrText), $targetAmount)) {
+        
+        // Keywords yang menandakan pembayaran berhasil
+        $successKeywords = ['berhasil', 'sukses', 'lunas', 'selesai', 'total bayar', 'transfer', 'smartpay', 'dana'];
+        $hasSuccessKeyword = false;
+        foreach ($successKeywords as $kw) {
+            if (str_contains($ocrText, $kw)) {
+                $hasSuccessKeyword = true;
+                break;
+            }
+        }
+
+        // Cek apakah nominal ada di dalam teks OCR
+        $amountMatched = str_contains($cleanOcr, $targetAmount);
+
+        if ($amountMatched && $hasSuccessKeyword) {
             $tagihan->update(['status' => 'paid', 'paid_at' => now(), 'metode_pembayaran' => 'otomatis']);
             try {
                 $waClient = new \App\Services\WhatsappClient();
                 $waClient->sendReceipt($tagihan);
-            } catch (\Exception $e) {}
-            return response()->json(['reply' => "✅ VERIFIKASI BERHASIL! Layanan Anda sudah aktif kembali. Nota telah dikirim."]);
+            } catch (\Exception $e) {
+                \Log::error("Failed to send receipt: " . $e->getMessage());
+            }
+            return response()->json(['reply' => "✅ VERIFIKASI OTOMATIS BERHASIL!\n\nTerima kasih, pembayaran sebesar Rp " . number_format($tagihan->jumlah, 0, ',', '.') . " telah kami terima. Layanan Anda kini sudah aktif kembali.\n\nNota digital telah dikirimkan ke nomor ini."]);
         }
 
-        return response()->json(['reply' => "⚠️ Bukti diterima. Menunggu verifikasi manual (OCR tidak terbaca jelas)."]);
+        return response()->json(['reply' => "⚠️ Bukti transfer telah kami terima. Namun, sistem kami perlu melakukan pengecekan manual untuk memastikan validitasnya. Mohon tunggu sebentar nggih Kak, admin kami akan segera mengonfirmasi."]);
     }
 
     private function handleCekTagihanPlaceholder($finalReply, $message, $remoteJid)

@@ -50,6 +50,7 @@ class PelangganController extends Controller
             'longitude' => 'required|numeric',
             'usage_gb' => 'nullable|numeric',
             'jumlah_device' => 'nullable|integer',
+            'paket' => 'nullable|string',
             'harga_layanan' => 'required|numeric',
             'ip_address' => 'nullable|string',
             'billing_date' => 'required|integer|min:1|max:28',
@@ -102,6 +103,7 @@ class PelangganController extends Controller
             'longitude' => 'required|numeric',
             'usage_gb' => 'nullable|numeric',
             'jumlah_device' => 'nullable|integer',
+            'paket' => 'nullable|string',
             'harga_layanan' => 'required|numeric',
             'ip_address' => 'nullable|string',
             'is_active' => 'required|boolean',
@@ -146,7 +148,7 @@ class PelangganController extends Controller
         if ($pelanggan->id_router && $pelanggan->router) {
             $mikrotik = app(MikrotikService::class);
             $username = $pelanggan->mikrotik_username ?: $pelanggan->kode_pelanggan;
-            $mikrotikData = $mikrotik->getUserDetails($pelanggan->router, $username, $pelanggan->mikrotik_type);
+            $mikrotikData = $mikrotik->getUserDetails($pelanggan->router, $username, $pelanggan->mikrotik_type, $pelanggan);
         }
 
         return view('content.pelanggan.show', compact('pelanggan', 'mikrotikData'));
@@ -166,28 +168,32 @@ class PelangganController extends Controller
         $mikrotik = app(MikrotikService::class);
         $username = $pelanggan->mikrotik_username ?: $pelanggan->kode_pelanggan;
         
-        if ($pelanggan->mikrotik_type === 'pppoe') {
-            // Try standard interface names
-            $interfaces = [
-                '<pppoe-' . $username . '>',
-                'pppoe-' . $username,
-                $username
-            ];
+        $traffic = null;
 
-            $traffic = null;
-            foreach ($interfaces as $iface) {
-                $traffic = $mikrotik->getTraffic($pelanggan->router, $iface);
-                if (!empty($traffic) && isset($traffic[0]['rx-bits-per-second'])) {
-                    break;
+        // Try to get real traffic first
+        try {
+            if ($pelanggan->mikrotik_type === 'pppoe') {
+                $interfaces = [
+                    '<pppoe-' . $username . '>',
+                    'pppoe-' . $username,
+                    $username
+                ];
+
+                foreach ($interfaces as $iface) {
+                    $traffic = $mikrotik->getTraffic($pelanggan->router, $iface);
+                    if (!empty($traffic) && isset($traffic[0]['rx-bits-per-second'])) {
+                        $traffic = $traffic[0];
+                        break;
+                    }
                 }
+            } else {
+                $traffic = $mikrotik->getQueueTraffic($pelanggan->router, $username, $pelanggan);
             }
-            
-            return response()->json($traffic[0] ?? ['rx-bits-per-second' => 0, 'tx-bits-per-second' => 0]);
-        } else {
-            // For Hotspot and Static, we use Simple Queue
-            $traffic = $mikrotik->getQueueTraffic($pelanggan->router, $username);
-            return response()->json($traffic ?? ['rx-bits-per-second' => 0, 'tx-bits-per-second' => 0]);
+        } catch (\Exception $e) {
+            $traffic = null;
         }
+
+        return response()->json($traffic ?? ['rx-bits-per-second' => 0, 'tx-bits-per-second' => 0]);
     }
 
     public function myConnection()
@@ -213,7 +219,20 @@ class PelangganController extends Controller
         if ($pelanggan->id_router && $pelanggan->router) {
             $mikrotik = app(MikrotikService::class);
             $username = $pelanggan->mikrotik_username ?: $pelanggan->kode_pelanggan;
-            $mikrotikData = $mikrotik->getUserDetails($pelanggan->router, $username, $pelanggan->mikrotik_type);
+            
+            // Real-time Sync IP from Mikrotik if missing
+            $activeIp = $mikrotik->getPelangganActiveIp($pelanggan->router, $username, $pelanggan->mikrotik_type);
+            if ($activeIp && (!$pelanggan->ip_address || $pelanggan->ip_address === 'N/A')) {
+                $pelanggan->update(['ip_address' => $activeIp]);
+            }
+
+            $mikrotikData = $mikrotik->getUserDetails($pelanggan->router, $username, $pelanggan->mikrotik_type, $pelanggan);
+            
+            // Update last online status in DB for GIS map consistency
+            $isOnline = isset($mikrotikData['active']) ? 1 : 0;
+            if ($pelanggan->last_online_status != $isOnline) {
+                $pelanggan->update(['last_online_status' => $isOnline]);
+            }
         }
 
         $allPelanggan = $isAdmin ? Pelanggan::all() : null;
@@ -305,7 +324,7 @@ class PelangganController extends Controller
         $headers = [
             'ID Pelanggan', 'ID Router', 'Kode Pelanggan', 'Nama Pelanggan', 'No WA', 
             'Mikrotik Username', 'Mikrotik Type', 'Alamat', 'Latitude', 'Longitude', 
-            'Usage GB', 'Jumlah Device', 'Harga Layanan', 'Status Aktif', 'Prioritas', 
+            'Usage GB', 'Jumlah Device', 'Harga Layanan', 'Paket', 'Status Aktif', 'Prioritas', 
             'IP Address', 'Billing Date'
         ];
 
@@ -331,14 +350,15 @@ class PelangganController extends Controller
             $sheet->setCellValue('K' . $row, $p->usage_gb);
             $sheet->setCellValue('L' . $row, $p->jumlah_device);
             $sheet->setCellValue('M' . $row, $p->harga_layanan);
-            $sheet->setCellValue('N' . $row, $p->is_active ? 'Aktif' : 'Nonaktif');
-            $sheet->setCellValue('O' . $row, $p->prioritas_label);
-            $sheet->setCellValue('P' . $row, $p->ip_address);
-            $sheet->setCellValue('Q' . $row, $p->billing_date);
+            $sheet->setCellValue('N' . $row, $p->paket);
+            $sheet->setCellValue('O' . $row, $p->is_active ? 'Aktif' : 'Nonaktif');
+            $sheet->setCellValue('P' . $row, $p->prioritas_label);
+            $sheet->setCellValue('Q' . $row, $p->ip_address);
+            $sheet->setCellValue('R' . $row, $p->billing_date);
             $row++;
         }
 
-        foreach (range('A', 'Q') as $col) {
+        foreach (range('A', 'R') as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
 
@@ -383,10 +403,11 @@ class PelangganController extends Controller
                     'usage_gb' => $row[10],
                     'jumlah_device' => $row[11],
                     'harga_layanan' => $row[12],
-                    'is_active' => (strtolower($row[13]) == 'aktif' || $row[13] == 1) ? 1 : 0,
-                    'prioritas_label' => $row[14],
-                    'ip_address' => $row[15],
-                    'billing_date' => $row[16] ?: 1,
+                    'paket' => $row[13],
+                    'is_active' => (strtolower($row[14]) == 'aktif' || $row[14] == 1) ? 1 : 0,
+                    'prioritas_label' => $row[15],
+                    'ip_address' => $row[16],
+                    'billing_date' => $row[17] ?: 1,
                 ]
             );
             $imported++;

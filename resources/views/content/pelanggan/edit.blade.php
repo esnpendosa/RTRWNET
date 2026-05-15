@@ -86,8 +86,20 @@
             </select>
         </div>
         <div class="col-md-4 mb-3">
+            <label class="form-label">Paket Layanan</label>
+            <select name="paket" id="paket_select" class="form-select">
+                <option value="">-- Pilih Paket --</option>
+                <option value="100rb 3mb" {{ $pelanggan->paket == '100rb 3mb' ? 'selected' : '' }}>100rb 3mb</option>
+                <option value="120rb 8mb" {{ $pelanggan->paket == '120rb 8mb' ? 'selected' : '' }}>120rb 8mb</option>
+                <option value="130rb 12mb" {{ $pelanggan->paket == '130rb 12mb' ? 'selected' : '' }}>130rb 12mb</option>
+                <option value="150rb 20mb" {{ $pelanggan->paket == '150rb 20mb' ? 'selected' : '' }}>150rb 20mb</option>
+                <option value="200rb 35mb" {{ $pelanggan->paket == '200rb 35mb' ? 'selected' : '' }}>200rb 35mb</option>
+                <option value="custom" {{ $pelanggan->paket == 'custom' ? 'selected' : '' }}>Custom</option>
+            </select>
+        </div>
+        <div class="col-md-4 mb-3">
             <label class="form-label">Harga Layanan (Rp)</label>
-            <input type="number" name="harga_layanan" class="form-control" value="{{ $pelanggan->harga_layanan }}" required />
+            <input type="number" name="harga_layanan" id="harga_layanan" class="form-control" value="{{ $pelanggan->harga_layanan }}" required />
         </div>
         <div class="col-md-4 mb-3">
             <label class="form-label">Status Aktif</label>
@@ -140,6 +152,27 @@
             marker.setLatLng(e.latlng);
             document.getElementById('lat').value = e.latlng.lat.toFixed(8);
             document.getElementById('lng').value = e.latlng.lng.toFixed(8);
+        });
+
+        // Paket selection logic
+        const paketSelect = document.getElementById('paket_select');
+        const hargaInput = document.getElementById('harga_layanan');
+
+        const paketPrices = {
+            '100rb 3mb': 100000,
+            '120rb 8mb': 120000,
+            '130rb 12mb': 130000,
+            '150rb 20mb': 150000,
+            '200rb 35mb': 200000
+        };
+
+        paketSelect.addEventListener('change', function() {
+            const selected = this.value;
+            if (paketPrices[selected]) {
+                hargaInput.value = paketPrices[selected];
+            } else if (selected === 'custom') {
+                hargaInput.focus();
+            }
         });
     });
 

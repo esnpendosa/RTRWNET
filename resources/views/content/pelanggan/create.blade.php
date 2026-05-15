@@ -71,8 +71,20 @@
             </select>
         </div>
         <div class="col-md-6 mb-3">
+            <label class="form-label">Paket Layanan</label>
+            <select name="paket" id="paket_select" class="form-select">
+                <option value="">-- Pilih Paket --</option>
+                <option value="100rb 3mb">100rb 3mb</option>
+                <option value="120rb 8mb">120rb 8mb</option>
+                <option value="130rb 12mb">130rb 12mb</option>
+                <option value="150rb 20mb">150rb 20mb</option>
+                <option value="200rb 35mb">200rb 35mb</option>
+                <option value="custom">Custom</option>
+            </select>
+        </div>
+        <div class="col-md-6 mb-3">
             <label class="form-label">Harga Layanan (Rp)</label>
-            <input type="number" name="harga_layanan" class="form-control" placeholder="150000" required />
+            <input type="number" name="harga_layanan" id="harga_layanan" class="form-control" placeholder="150000" required />
         </div>
         <div class="col-md-6 mb-3">
             <label class="form-label">Alamat IP (Static/ONT)</label>
@@ -115,6 +127,27 @@
             marker = L.marker(e.latlng).addTo(map);
             document.getElementById('lat').value = e.latlng.lat;
             document.getElementById('lng').value = e.latlng.lng;
+        });
+
+        // Paket selection logic
+        const paketSelect = document.getElementById('paket_select');
+        const hargaInput = document.getElementById('harga_layanan');
+
+        const paketPrices = {
+            '100rb 3mb': 100000,
+            '120rb 8mb': 120000,
+            '130rb 12mb': 130000,
+            '150rb 20mb': 150000,
+            '200rb 35mb': 200000
+        };
+
+        paketSelect.addEventListener('change', function() {
+            const selected = this.value;
+            if (paketPrices[selected]) {
+                hargaInput.value = paketPrices[selected];
+            } else if (selected === 'custom') {
+                hargaInput.focus();
+            }
         });
     });
 </script>

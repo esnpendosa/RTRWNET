@@ -26,6 +26,7 @@ class Pelanggan extends Model
         'longitude',
         'usage_gb',
         'jumlah_device',
+        'paket',
         'harga_layanan',
         'is_active',
         'prioritas_label',

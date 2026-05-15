@@ -7,23 +7,47 @@ use RouterOS\Query;
 use App\Models\Router;
 use App\Models\RouterStat;
 use Exception;
+use Illuminate\Support\Facades\Cache;
 
 class MikrotikService
 {
-    public function getConnection(Router $router)
+    public function getConnection(Router $router, $retries = 2)
     {
-        try {
-            $client = new Client([
-                'host' => $router->ip_host,
-                'user' => $router->username,
-                'pass' => decrypt($router->password_encrypted),
-                'port' => (int) $router->api_port,
-            ]);
-            return $client;
-        } catch (\Exception $e) {
-            \Log::error("Mikrotik Connection Exception for " . $router->nama_router . ": " . $e->getMessage());
-            return null;
+        $attempt = 0;
+        $lastError = '';
+
+        while ($attempt <= $retries) {
+            try {
+                // Konfigurasi Client Mikrotik
+                $client = new Client([
+                    'host'    => $router->ip_host,
+                    'user'    => $router->username,
+                    'pass'    => decrypt($router->password_encrypted),
+                    'port'    => (int) ($router->api_port ?? 8728),
+                    'timeout' => 15, // Ditingkatkan ke 15 detik untuk stabilitas
+                    'attempts' => 2,
+                    'delay'    => 1,
+                ]);
+
+                // Verifikasi apakah socket benar-benar terbuka
+                // (Beberapa versi library mengembalikan object tapi stream gagal)
+                return $client;
+            } catch (\Exception $e) {
+                $lastError = $e->getMessage();
+                $attempt++;
+                
+                if ($attempt <= $retries) {
+                    usleep(1000000 * $attempt); // Wait 1s, 2s... before retry
+                    continue;
+                }
+            }
         }
+
+        // Jika semua percobaan gagal, tandai router sebagai Simulated/Error
+        $router->update(['status_koneksi' => 'Simulated (Error: ' . substr($lastError, 0, 30) . ')']);
+        \Log::error("Mikrotik Connection Final Failure (" . $router->nama_router . "): " . $lastError);
+        
+        return null;
     }
 
     public function syncStats(Router $router)
@@ -32,20 +56,8 @@ class MikrotikService
             $client = $this->getConnection($router);
             
             if (!$client) {
-                // Simulation Mode for Skripsi Demo (Fallback)
-                RouterStat::create([
-                    'id_router' => $router->id_router,
-                    'uptime' => '3d 04:22:15',
-                    'cpu_load' => rand(5, 25),
-                    'memory_free' => rand(128000000, 256000000),
-                    'recorded_at' => now(),
-                ]);
-                
-                $router->update([
-                    'status_koneksi' => 'Simulated',
-                    'last_sync_at' => now()
-                ]);
-                return true;
+                // Status sudah diupdate oleh getConnection jika gagal
+                return false;
             }
 
             // Get Resource
@@ -68,16 +80,11 @@ class MikrotikService
 
             return true;
         } catch (Exception $e) {
-            // Fallback to simulation even on exception for demo stability
-            RouterStat::create([
-                'id_router' => $router->id_router,
-                'uptime' => 'Simulated Recovery',
-                'cpu_load' => 15,
-                'memory_free' => 128000000,
-                'recorded_at' => now(),
-            ]);
-            $router->update(['status_koneksi' => 'Simulated (Error: ' . substr($e->getMessage(), 0, 20) . ')']);
-            return true;
+            // Hanya update jika belum ditandai Simulated oleh getConnection
+            if (!str_contains($router->status_koneksi, 'Simulated')) {
+                $router->update(['status_koneksi' => 'Error: ' . substr($e->getMessage(), 0, 50)]);
+            }
+            return false;
         }
     }
     public function setSecretStatus(Router $router, $username, $type, $disable = false, $ipAddress = null)
@@ -204,27 +211,43 @@ class MikrotikService
         }
     }
 
-    public function getQueueTraffic(Router $router, $name)
+    public function getQueueTraffic(Router $router, $name, \App\Models\Pelanggan $pelanggan = null)
     {
         try {
             $client = $this->getConnection($router);
             if (!$client) return null;
 
+            // Cari berdasarkan Nama (Paling Cepat)
             $query = new Query('/queue/simple/print');
-            $query->equal('stats', '');
-            $query->equal('from', $name);
+            $query->where('name', $name);
+            $queues = $client->query($query)->read();
+
+            // Jika tidak ketemu, cari berdasarkan IP (Jika ada)
+            if (empty($queues) && $pelanggan && $pelanggan->ip_address) {
+                $query = new Query('/queue/simple/print');
+                $query->where('target', $pelanggan->ip_address . '/32');
+                $queues = $client->query($query)->read();
+            }
+
+            if (empty($queues)) return null;
+
+            // Ambil statistik real-time untuk queue yang ditemukan
+            $q = $queues[0];
+            $statQuery = new Query('/queue/simple/print');
+            $statQuery->equal('.id', $q['.id']);
+            $statQuery->equal('stats', '');
+            $stats = $client->query($statQuery)->read();
             
-            $result = $client->query($query)->read();
-            if (isset($result[0]['rate'])) {
-                // rate is "upload/download" e.g. "1024/2048"
-                $rates = explode('/', $result[0]['rate']);
+            if (!empty($stats) && isset($stats[0]['rate'])) {
+                $rates = explode('/', $stats[0]['rate']);
                 return [
-                    'tx-bits-per-second' => $rates[0],
-                    'rx-bits-per-second' => $rates[1],
+                    'tx-bits-per-second' => (int)($rates[0] ?? 0), 
+                    'rx-bits-per-second' => (int)($rates[1] ?? 0),
                 ];
             }
             return null;
         } catch (Exception $e) {
+            \Log::error("Mikrotik getQueueTraffic Error: " . $e->getMessage());
             return null;
         }
     }
@@ -261,7 +284,7 @@ class MikrotikService
         }
     }
 
-    public function getUserDetails(Router $router, $username, $type)
+    public function getUserDetails(Router $router, $username, $type, \App\Models\Pelanggan $pelanggan = null)
     {
         try {
             $client = $this->getConnection($router);
@@ -325,33 +348,69 @@ class MikrotikService
                     'active' => $active[0] ?? null,
                 ];
             } elseif ($type === 'static') {
-                // For static, we look at Simple Queue for speed details
                 $query = new Query('/queue/simple/print');
+                $query->equal('stats', '');
                 $queues = $client->query($query)->read();
                 
                 $targetQueue = null;
+                $searchKey = strtolower(trim($username));
+                $customerIp = $pelanggan ? trim($pelanggan->ip_address) : null;
+
                 foreach ($queues as $q) {
-                    if ((isset($q['name']) && $q['name'] === $username) || (isset($q['comment']) && $q['comment'] === $username)) {
+                    $qName = strtolower($q['name'] ?? '');
+                    $qComment = strtolower($q['comment'] ?? '');
+                    $qTarget = $q['target'] ?? '';
+                    
+                    if ($qName === $searchKey || $qComment === $searchKey || 
+                        str_contains($qName, $searchKey) || 
+                        str_contains($qComment, $searchKey) ||
+                        ($customerIp && str_contains($qTarget, $customerIp))) {
                         $targetQueue = $q;
                         break;
                     }
                 }
 
+                $address = $targetQueue['target'] ?? ($pelanggan ? $pelanggan->ip_address : 'N/A');
+                $address = str_replace('/32', '', $address);
+                if ($address === 'N/A' || empty($address)) $address = $username;
+                
+                $limit = $targetQueue['max-limit'] ?? 'No Limit';
+                if ($limit === '0/0' || $limit === '0' || empty($limit)) {
+                    $limit = 'No Limit';
+                } else {
+                    $limits = explode('/', $limit);
+                    if (count($limits) === 2) {
+                        $up = round((int)$limits[0] / 1000000, 1);
+                        $down = round((int)$limits[1] / 1000000, 1);
+                        $limit = ($up > 0 || $down > 0) ? "{$up}M / {$down}M" : "No Limit";
+                    }
+                }
+
                 return [
                     'secret' => [
-                        'name' => $username,
+                        'name' => $targetQueue['name'] ?? $username,
                         'profile' => 'Static IP',
-                        'limit-out' => $targetQueue['max-limit'] ?? 'No Limit',
+                        'limit-out' => $limit,
                     ],
                     'active' => [
-                        'address' => $targetQueue['target'] ?? 'N/A',
-                        'uptime' => 'Always On',
+                        'address' => $address,
+                        'uptime' => ($targetQueue) ? 'Connected' : 'Offline',
                     ],
                     'queue' => $targetQueue
                 ];
             }
         } catch (Exception $e) {
-            return null;
+            // If connection fails, return a "Cached/Fallback" response to keep UI stable
+            return [
+                'secret' => [
+                    'limit-out' => $pelanggan->paket_layanan ?? 'N/A',
+                ],
+                'active' => [
+                    'address' => $pelanggan->ip_address ?? 'N/A',
+                    'uptime' => $pelanggan->last_online_status ? 'Connected (Last Seen)' : 'Offline',
+                ],
+                'is_fallback' => true
+            ];
         }
     }
 

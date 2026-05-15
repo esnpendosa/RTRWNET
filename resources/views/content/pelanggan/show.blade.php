@@ -33,6 +33,12 @@
                 </div>
 
                 <div class="mt-4 text-start">
+                    <p class="mb-1 text-muted small"><i class="bx bx-package me-1"></i> Paket Layanan</p>
+                    <p class="fw-bold text-primary">{{ $pelanggan->paket ?? 'Custom / Belum Set' }}</p>
+
+                    <p class="mb-1 text-muted small"><i class="bx bx-money me-1"></i> Harga Bulanan</p>
+                    <p class="fw-bold">Rp {{ number_format($pelanggan->harga_layanan, 0, ',', '.') }}</p>
+
                     <p class="mb-1 text-muted small"><i class="bx bx-phone me-1"></i> WhatsApp</p>
                     <p class="fw-bold">{{ $pelanggan->no_wa ?? '-' }}</p>
                     

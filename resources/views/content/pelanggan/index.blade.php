@@ -38,6 +38,7 @@
           <th>Alamat</th>
           <th>Usage (GB)</th>
           <th>Devices</th>
+          <th>Paket</th>
           <th>Status</th>
           <th>Prioritas</th>
           <th>Aksi</th>
@@ -51,6 +52,7 @@
           <td>{{ Str::limit($p->alamat, 30) }}</td>
           <td>{{ $p->usage_gb }} GB</td>
           <td>{{ $p->jumlah_device }}</td>
+          <td><span class="badge bg-label-primary">{{ $p->paket ?? '-' }}</span></td>
           <td>
             <form action="{{ route('pelanggan.toggle-status', $p->id_pelanggan) }}" method="POST">
               @csrf
@@ -76,20 +78,11 @@
                 </a>
                 <a class="dropdown-item" href="{{ route('pelanggan.edit', $p->id_pelanggan) }}"><i class="bx bx-edit-alt me-1"></i> Edit</a>
 
-                @if($p->latitude && $p->longitude)
-                <a class="dropdown-item text-success" href="https://www.google.com/maps?q={{ $p->latitude }},{{ $p->longitude }}" target="_blank">
-                    <i class="bx bx-map me-1"></i> Buka di Google Maps
-                </a>
-                @endif
                 <form action="{{ route('pelanggan.toggle-status', $p->id_pelanggan) }}" method="POST">
                     @csrf
                     <button type="submit" class="dropdown-item">
                         <i class="bx {{ $p->is_active ? 'bx-power-off' : 'bx-play' }} me-1"></i> {{ $p->is_active ? 'Nonaktifkan' : 'Aktifkan' }}
                     </button>
-                </form>
-                <form action="{{ route('pelanggan.destroy', $p->id_pelanggan) }}" method="POST" style="display:inline;">
-                    @csrf @method('DELETE')
-                    <button type="submit" class="dropdown-item text-danger" onclick="return confirm('Yakin ingin menghapus?')"><i class="bx bx-trash me-1"></i> Delete</button>
                 </form>
             </div>
           </td>
