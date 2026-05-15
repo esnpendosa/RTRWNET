@@ -143,6 +143,11 @@ Route::middleware(['auth'])->group(function () {
     Route::put('bot/responses/{bot}', [\App\Http\Controllers\BotResponseController::class, 'update'])->name('bot.update');
     Route::delete('bot/responses/{bot}', [\App\Http\Controllers\BotResponseController::class, 'destroy'])->name('bot.destroy');
 
+    // System Logs
+    Route::get('system/logs', [\App\Http\Controllers\LogController::class, 'index'])->name('logs.index');
+    Route::get('system/logs/fetch', [\App\Http\Controllers\LogController::class, 'fetch'])->name('logs.fetch');
+    Route::post('system/logs/clear', [\App\Http\Controllers\LogController::class, 'clear'])->name('logs.clear');
+
 });
 
 // Whatsapp Hook (Outside auth because it's called by the Node.js bot)

@@ -129,6 +129,13 @@
       "permission": "user_manage"
     },
     {
+      "url": "/system/logs",
+      "name": "Cek Logs Realtime",
+      "icon": "menu-icon icon-base bx bx-terminal",
+      "slug": "logs",
+      "permission": "user_manage"
+    },
+    {
       "name": "Laporan",
       "icon": "menu-icon icon-base bx bx-chart",
       "slug": "laporan",
