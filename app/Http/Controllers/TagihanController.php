@@ -72,9 +72,9 @@ class TagihanController extends Controller
             $tagihan->update(['paid_at' => now()]);
             
             $pelanggan = $tagihan->pelanggan;
-            if ($pelanggan && $pelanggan->router && $pelanggan->mikrotik_username) {
+            if ($pelanggan && $pelanggan->id_router) {
                 $mikrotikService = app(\App\Services\MikrotikService::class);
-                $mikrotikService->setSecretStatus($pelanggan->router, $pelanggan->mikrotik_username, $pelanggan->mikrotik_type, false);
+                $mikrotikService->setSecretStatus($pelanggan->router, $pelanggan->mikrotik_username ?: $pelanggan->kode_pelanggan, $pelanggan->mikrotik_type, false, $pelanggan->ip_address);
                 $pelanggan->update(['is_active' => true]);
             }
 
@@ -206,9 +206,9 @@ class TagihanController extends Controller
         ]);
 
         $pelanggan = $tagihan->pelanggan;
-        if ($pelanggan && $pelanggan->router && $pelanggan->mikrotik_username) {
+        if ($pelanggan && $pelanggan->id_router) {
             $mikrotikService = app(\App\Services\MikrotikService::class);
-            $mikrotikService->setSecretStatus($pelanggan->router, $pelanggan->mikrotik_username, $pelanggan->mikrotik_type, false);
+            $mikrotikService->setSecretStatus($pelanggan->router, $pelanggan->mikrotik_username ?: $pelanggan->kode_pelanggan, $pelanggan->mikrotik_type, false, $pelanggan->ip_address);
             $pelanggan->update(['is_active' => true]);
         }
 
@@ -276,5 +276,27 @@ class TagihanController extends Controller
         $fileName = 'Nota-' . $tagihan->pelanggan->kode_pelanggan . '-' . date('M-Y', mktime(0, 0, 0, $tagihan->bulan, 10)) . '.pdf';
         
         return $pdf->download($fileName);
+    }
+    public function runIsolirSync(Request $request)
+    {
+        if (auth()->user()->id_role != 1) abort(403);
+
+        $type = $request->query('type', 'all'); // 'disable', 'enable', 'all'
+        
+        try {
+            if ($type == 'disable' || $type == 'all') {
+                \Illuminate\Support\Facades\Artisan::call('billing:disable-unpaid');
+            }
+            
+            if ($type == 'enable' || $type == 'all') {
+                \Illuminate\Support\Facades\Artisan::call('billing:enable-paid');
+            }
+            
+            $output = \Illuminate\Support\Facades\Artisan::output();
+            
+            return back()->with('success', 'Sinkronisasi On/Off otomatis selesai dijalankan. Hasil: ' . nl2br($output));
+        } catch (\Exception $e) {
+            return back()->with('error', 'Gagal menjalankan sinkronisasi: ' . $e->getMessage());
+        }
     }
 }

@@ -16,12 +16,17 @@ class EnablePaidServices extends Command
         $currentMonth = now()->month;
         $currentYear = now()->year;
 
-        // Cari pelanggan yang tidak aktif (is_active = false) tapi sudah punya tagihan PAID bulan ini
+        // Cari pelanggan yang tidak aktif tapi sudah tidak punya tunggakan lagi (bulan ini atau sebelumnya)
         $paidPelanggan = \App\Models\Pelanggan::where('is_active', false)
-            ->whereHas('tagihan', function ($query) use ($currentMonth, $currentYear) {
-                $query->where('bulan', $currentMonth)
-                      ->where('tahun', $currentYear)
-                      ->where('status', 'paid');
+            ->whereDoesntHave('tagihan', function ($query) use ($currentMonth, $currentYear) {
+                $query->where('status', 'unpaid')
+                      ->where(function($q) use ($currentMonth, $currentYear) {
+                          $q->where('tahun', '<', $currentYear)
+                            ->orWhere(function($sq) use ($currentMonth, $currentYear) {
+                                $sq->where('tahun', $currentYear)
+                                   ->where('bulan', '<=', $currentMonth);
+                            });
+                      });
             })->get();
 
         if ($paidPelanggan->isEmpty()) {

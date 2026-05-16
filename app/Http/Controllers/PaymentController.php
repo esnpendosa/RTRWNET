@@ -138,9 +138,9 @@ class PaymentController extends Controller
         ]);
 
         $pelanggan = $tagihan->pelanggan;
-        if ($pelanggan && $pelanggan->router && $pelanggan->mikrotik_username) {
+        if ($pelanggan && $pelanggan->id_router) {
             // Re-enable Mikrotik Service
-            $this->mikrotikService->setSecretStatus($pelanggan->router, $pelanggan->mikrotik_username, $pelanggan->mikrotik_type, false);
+            $this->mikrotikService->setSecretStatus($pelanggan->router, $pelanggan->mikrotik_username ?: $pelanggan->kode_pelanggan, $pelanggan->mikrotik_type, false, $pelanggan->ip_address);
             $pelanggan->update(['is_active' => true]);
         }
 

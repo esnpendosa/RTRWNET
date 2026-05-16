@@ -115,7 +115,12 @@ class WhatsappController extends Controller
 
         // Jika di Grup: Hanya balas jika di-mention
         // Jika di Chat Pribadi: Selalu balas (AI atau Default)
-        if (!$isGroup || ($isGroup && $isMentioned)) {
+        // 4. Fallback (AI or Default) - SEKARANG DIBUAT PASIF
+        // Hanya membalas jika di-mention (di grup) atau jika pesan mengandung kata sapaan/bantuan
+        $greetings = ['halo', 'hi', 'p', 'bot', 'help', 'menu', 'bantuan', 'tanya', 'siapa'];
+        $isGreeting = in_array($lowerMsg, $greetings);
+
+        if (($isGroup && $isMentioned) || (!$isGroup && $isGreeting)) {
             // AI Fallback (Hanya jika diaktifkan di .env)
             if (env('WHATSAPP_AI_ENABLED', true)) {
                 $aiReply = $this->getAiResponse($message, $remoteJid, $request->pushName ?? 'Pelanggan');
@@ -125,15 +130,17 @@ class WhatsappController extends Controller
                 }
             }
 
-            // Default Fallback dari Database
-            $fallback = \App\Models\BotResponse::where('keyword', 'like', '%default%')->where('is_active', true)->first();
-            $reply = $fallback ? $this->formatForWhatsapp($fallback->response) : "🤖 *RT RW NET BOT*\nKetik *menu* untuk melihat bantuan.";
-            
-            $this->saveBotReply($remoteJid, $reply);
-            return response()->json(['reply' => $reply]);
+            // Default Fallback dari Database (Hanya jika diinginkan)
+            if (env('WHATSAPP_DEFAULT_REPLY_ENABLED', false)) {
+                $fallback = \App\Models\BotResponse::where('keyword', 'like', '%default%')->where('is_active', true)->first();
+                $reply = $fallback ? $this->formatForWhatsapp($fallback->response) : "🤖 *RT RW NET BOT*\nKetik *menu* untuk melihat bantuan.";
+                
+                $this->saveBotReply($remoteJid, $reply);
+                return response()->json(['reply' => $reply]);
+            }
         }
 
-        // If it's a group and no keyword matched and not mentioned, stay silent
+        // Jika tidak ada keyword yang cocok dan bukan mention/sapaan, diam saja (Silent Mode)
         return response()->json(['status' => 'ignored_no_match']);
     }
 
@@ -400,7 +407,25 @@ class WhatsappController extends Controller
         $tagihan = null;
         if ($lastCheckedId) $tagihan = Tagihan::where('id_pelanggan', $lastCheckedId)->whereIn('status', ['unpaid', 'belum_bayar'])->latest()->first();
 
-        if (!$tagihan) return response()->json(['reply' => "Maaf Kak, saya tidak menemukan tagihan aktif. Ketik *cek tagihan [KODE]* dulu ya!"]);
+        if (!$tagihan) {
+            // Jika tidak ada tagihan, cek apakah gambar ini sepertinya struk pembayaran (via OCR)
+            $ocrText = strtolower($request->ocrText ?? '');
+            $receiptKeywords = ['transfer', 'jumlah', 'rp', 'berhasil', 'sukses', 'bank', 'bri', 'dana'];
+            $looksLikeReceipt = false;
+            foreach ($receiptKeywords as $kw) {
+                if (str_contains($ocrText, $kw)) {
+                    $looksLikeReceipt = true;
+                    break;
+                }
+            }
+
+            // Jika bukan struk dan tidak sedang cek tagihan, abaikan saja (jangan balas)
+            if (!$looksLikeReceipt) {
+                return response()->json(['status' => 'ignored_not_a_receipt']);
+            }
+
+            return response()->json(['reply' => "Maaf Kak, saya tidak menemukan tagihan aktif untuk Anda. Ketik *cek tagihan [KODE]* dulu ya sebelum kirim bukti bayar!"]);
+        }
 
         $imageData = base64_decode($request->media);
         $fileName = 'bukti_' . $tagihan->id_tagihan . '_' . time() . '.jpg';

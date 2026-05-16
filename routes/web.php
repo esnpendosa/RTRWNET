@@ -113,6 +113,7 @@ Route::middleware(['auth'])->group(function () {
     // Settings
     Route::get('settings/payment', [\App\Http\Controllers\TagihanController::class, 'settings'])->name('settings.payment');
     Route::post('settings/payment', [\App\Http\Controllers\TagihanController::class, 'updateSettings'])->name('settings.payment.update');
+    Route::post('settings/billing/run-isolir', [\App\Http\Controllers\TagihanController::class, 'runIsolirSync'])->name('settings.billing.isolir');
 
     // Inventory
     Route::middleware('can:inventory_manage')->group(function() {

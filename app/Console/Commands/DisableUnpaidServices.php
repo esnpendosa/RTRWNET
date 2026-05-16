@@ -37,12 +37,17 @@ class DisableUnpaidServices extends Command
         $currentMonth = now()->month;
         $currentYear = now()->year;
 
-        // Cari pelanggan yang punya tagihan UNPAID bulan ini dan masih aktif
+        // Cari pelanggan yang punya tagihan UNPAID (bulan ini atau sebelumnya) dan masih aktif
         $unpaidPelanggan = \App\Models\Pelanggan::where('is_active', true)
             ->whereHas('tagihan', function ($query) use ($currentMonth, $currentYear) {
-                $query->where('bulan', $currentMonth)
-                      ->where('tahun', $currentYear)
-                      ->where('status', 'unpaid');
+                $query->where('status', 'unpaid')
+                      ->where(function($q) use ($currentMonth, $currentYear) {
+                          $q->where('tahun', '<', $currentYear)
+                            ->orWhere(function($sq) use ($currentMonth, $currentYear) {
+                                $sq->where('tahun', $currentYear)
+                                   ->where('bulan', '<=', $currentMonth);
+                            });
+                      });
             })->get();
 
         $waClient = new \App\Services\WhatsappClient();
@@ -72,7 +77,8 @@ class DisableUnpaidServices extends Command
                         }
                     }
                 } else {
-                    $this->error("Gagal menonaktifkan Mikrotik untuk {$p->nama_pelanggan}");
+                    $this->error("Gagal menonaktifkan Mikrotik untuk {$p->nama_pelanggan} (ID: {$p->id_pelanggan}, Type: {$p->mikrotik_type})");
+                    \Log::warning("Billing: Failed to disable Mikrotik for {$p->nama_pelanggan}. Check router connection or customer existance.");
                 }
             }
         }

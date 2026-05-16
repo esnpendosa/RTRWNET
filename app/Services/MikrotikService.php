@@ -45,7 +45,7 @@ class MikrotikService
 
         // Jika semua percobaan gagal, tandai router sebagai Simulated/Error
         $router->update(['status_koneksi' => 'Simulated (Error: ' . substr($lastError, 0, 30) . ')']);
-        \Log::error("Mikrotik Connection Final Failure (" . $router->nama_router . "): " . $lastError);
+        \Log::error("Mikrotik Connection Final Failure (" . $router->nama_router . ") at " . $router->ip_host . ": " . $lastError);
         
         return null;
     }
@@ -340,7 +340,12 @@ class MikrotikService
     {
         try {
             $client = $this->getConnection($router);
-            if (!$client) return false;
+            if (!$client) {
+                \Log::error("Mikrotik setSecretStatus: Connection failed to router {$router->nama_router}");
+                return false;
+            }
+
+            $found = false;
 
             // 1. Update status secret (Enable/Disable)
             if ($type === 'pppoe') {
@@ -350,6 +355,19 @@ class MikrotikService
                 if (!empty($resp)) {
                     $id = $resp[0]['.id'];
                     $client->query((new Query('/ppp/secret/set'))->equal('.id', $id)->equal('disabled', $disable ? 'yes' : 'no'))->read();
+                    
+                    // Jika isolir, putuskan koneksi aktif agar segera terputus
+                    if ($disable) {
+                        $activeQuery = new Query('/ppp/active/print');
+                        $activeQuery->where('name', $username);
+                        $activeResp = $client->query($activeQuery)->read();
+                        if (!empty($activeResp)) {
+                            foreach ($activeResp as $active) {
+                                $client->query((new Query('/ppp/active/remove'))->equal('.id', $active['.id']))->read();
+                            }
+                        }
+                    }
+                    $found = true;
                 }
             } elseif ($type === 'hotspot') {
                 $query = new Query('/ip/hotspot/user/print');
@@ -358,16 +376,117 @@ class MikrotikService
                 if (!empty($resp)) {
                     $id = $resp[0]['.id'];
                     $client->query((new Query('/ip/hotspot/user/set'))->equal('.id', $id)->equal('disabled', $disable ? 'yes' : 'no'))->read();
+                    
+                    // Jika isolir, putuskan sesi aktif
+                    if ($disable) {
+                        $activeQuery = new Query('/ip/hotspot/active/print');
+                        $activeQuery->where('user', $username);
+                        $activeResp = $client->query($activeQuery)->read();
+                        if (!empty($activeResp)) {
+                            foreach ($activeResp as $active) {
+                                $client->query((new Query('/ip/hotspot/active/remove'))->equal('.id', $active['.id']))->read();
+                            }
+                        }
+                    }
+                    $found = true;
                 }
-            } elseif ($type === 'static' && $ip) {
-                // Untuk static, isolir biasanya dengan disable queue simple
+            } elseif ($type === 'static') {
+                // 1. Update Simple Queue (Limit Speed)
                 $query = new Query('/queue/simple/print');
-                $query->equal('target', $ip . '/32');
+                $query->where('name', $username);
                 $resp = $client->query($query)->read();
+                
+                if (empty($resp) && $ip) {
+                    $query = new Query('/queue/simple/print');
+                    $query->where('target', $ip . '/32');
+                    $resp = $client->query($query)->read();
+                    
+                    if (empty($resp)) {
+                        $query = new Query('/queue/simple/print');
+                        $query->where('target', $ip);
+                        $resp = $client->query($query)->read();
+                    }
+                }
+
                 if (!empty($resp)) {
                     $id = $resp[0]['.id'];
-                    $client->query((new Query('/queue/simple/set'))->equal('.id', $id)->equal('disabled', $disable ? 'yes' : 'no'))->read();
+                    if ($disable) {
+                        // Jangan di-disable antriannya (karena malah jadi loss), tapi limit ke 1kbps
+                        $client->query((new Query('/queue/simple/set'))
+                            ->equal('.id', $id)
+                            ->equal('max-limit', '1k/1k')
+                            ->equal('comment', 'ISOLIR OTOMATIS')
+                            ->equal('disabled', 'no'))->read();
+                    } else {
+                        // Kembalikan ke limit normal (misal 10M/10M atau biarkan admin set ulang)
+                        // Sebagai fallback, kita set ke 100M agar tidak lemot setelah bayar, 
+                        // atau idealnya kita tidak ubah limitnya tapi pastikan 'disabled=no'
+                        $client->query((new Query('/queue/simple/set'))
+                            ->equal('.id', $id)
+                            ->equal('disabled', 'no'))->read();
+                        // Catatan: Speed asli akan kembali jika router di-sync ulang atau admin mengubahnya
+                    }
+                    $found = true;
                 }
+
+                // 2. Update Address List (Block Traffic via Firewall)
+                if ($ip) {
+                    $listName = 'ISOLIR';
+                    $addrQuery = new Query('/ip/firewall/address-list/print');
+                    $addrQuery->where('address', $ip);
+                    $addrQuery->where('list', $listName);
+                    $addrResp = $client->query($addrQuery)->read();
+                    
+                    if ($disable) {
+                        if (empty($addrResp)) {
+                            $addQuery = (new Query('/ip/firewall/address-list/add'))
+                                ->equal('address', $ip)
+                                ->equal('list', $listName)
+                                ->equal('comment', 'ISOLIR OTOMATIS: ' . $username);
+                            $client->query($addQuery)->read();
+                        }
+                    } else {
+                        if (!empty($addrResp)) {
+                            foreach ($addrResp as $addr) {
+                                $remQuery = (new Query('/ip/firewall/address-list/remove'))
+                                    ->equal('.id', $addr['.id']);
+                                $client->query($remQuery)->read();
+                            }
+                        }
+                    }
+                    $found = true; // Tandai ditemukan jika berhasil update address-list
+                }
+
+                // 3. Update Firewall Filter Rule (Custom method requested by user)
+                // Mencari rule dengan comment yang sama dengan username/kode pelanggan
+                $filterQuery = new Query('/ip/firewall/filter/print');
+                $filterQuery->where('comment', $username);
+                $filterResp = $client->query($filterQuery)->read();
+                
+                if (!empty($filterResp)) {
+                    foreach ($filterResp as $filter) {
+                        // Update existing rule
+                        $client->query((new Query('/ip/firewall/filter/set'))
+                            ->equal('.id', $filter['.id'])
+                            ->equal('dst-address', $ip) // Pastikan IP sesuai
+                            ->equal('disabled', $disable ? 'no' : 'yes'))->read();
+                    }
+                } elseif ($disable && $ip) {
+                    // Buat rule baru jika sedang isolir dan rule belum ada
+                    $addFilterQuery = (new Query('/ip/firewall/filter/add'))
+                        ->equal('chain', 'forward')
+                        ->equal('action', 'drop')
+                        ->equal('dst-address', $ip)
+                        ->equal('comment', $username)
+                        ->equal('disabled', 'no'); // Langsung aktif (blokir)
+                    $client->query($addFilterQuery)->read();
+                }
+                $found = true;
+            }
+
+            if (!$found) {
+                \Log::warning("Mikrotik setSecretStatus: Customer {$username} not found on Mikrotik ({$type})");
+                return false;
             }
 
             // 2. Tendang sesi aktif jika di-disable agar koneksi terputus saat itu juga
@@ -391,7 +510,7 @@ class MikrotikService
 
             return true;
         } catch (Exception $e) {
-            \Log::error("Mikrotik setSecretStatus Error: " . $e->getMessage());
+            \Log::error("Mikrotik setSecretStatus Error for user {$username} on router {$router->nama_router}: " . $e->getMessage());
             return false;
         }
     }

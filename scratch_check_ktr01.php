@@ -1,15 +1,26 @@
 <?php
 require 'vendor/autoload.php';
 $app = require_once 'bootstrap/app.php';
-$kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
-$kernel->bootstrap();
+$app->make('Illuminate\Contracts\Console\Kernel')->bootstrap();
 
-$p = \App\Models\Pelanggan::where('kode_pelanggan', 'KTR01')->first();
-if ($p) {
-    echo "Pelanggan: " . $p->nama_pelanggan . "\n";
-    echo "No WA: " . $p->no_wa . "\n";
-    echo "ID Router: " . $p->id_router . "\n";
-    echo "Is Active: " . $p->is_active . "\n";
-} else {
-    echo "Pelanggan KTR01 not found.\n";
+use App\Models\Pelanggan;
+use App\Models\Tagihan;
+
+$customers = Pelanggan::where('ip_address', '192.168.90.254')->get();
+
+$data = [];
+foreach ($customers as $p) {
+    $bills = $p->tagihan()->get();
+    $data[] = [
+        'pelanggan' => [
+            'id' => $p->id_pelanggan,
+            'kode' => $p->kode_pelanggan,
+            'nama' => $p->nama_pelanggan,
+            'is_active' => $p->is_active,
+            'ip_address' => $p->ip_address,
+        ],
+        'bills' => $bills->toArray(),
+    ];
 }
+
+echo json_encode($data, JSON_PRETTY_PRINT);

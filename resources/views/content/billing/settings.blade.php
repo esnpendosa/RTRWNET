@@ -140,6 +140,33 @@
                     </div>
                     <button type="submit" class="btn btn-info mt-3">💾 Simpan Pengaturan Otomatisasi</button>
                 </form>
+
+                <hr class="my-4">
+                
+                <h6 class="mb-3">🚀 Eksekusi Manual (Force Sync)</h6>
+                <div class="d-flex flex-wrap gap-2">
+                    <form action="{{ route('settings.billing.isolir', ['type' => 'disable']) }}" method="POST">
+                        @csrf
+                        <button type="submit" class="btn btn-outline-danger btn-sm">
+                            <i class="bx bx-power-off me-1"></i> Jalankan Isolir (Matikan Unpaid)
+                        </button>
+                    </form>
+                    
+                    <form action="{{ route('settings.billing.isolir', ['type' => 'enable']) }}" method="POST">
+                        @csrf
+                        <button type="submit" class="btn btn-outline-success btn-sm">
+                            <i class="bx bx-play-circle me-1"></i> Jalankan Aktivasi (Nyalakan Paid)
+                        </button>
+                    </form>
+
+                    <form action="{{ route('settings.billing.isolir', ['type' => 'all']) }}" method="POST">
+                        @csrf
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <i class="bx bx-sync me-1"></i> Sinkronisasi Keduanya
+                        </button>
+                    </form>
+                </div>
+                <p class="text-muted small mt-2 mb-0">Gunakan tombol di atas untuk memaksa sistem mengecek status pembayaran dan mengupdate akses Mikrotik saat ini juga.</p>
             </div>
         </div>
     </div>
