@@ -6,30 +6,41 @@ use Illuminate\Console\Command;
 
 class DisableUnpaidServices extends Command
 {
-    protected $signature = 'billing:disable-unpaid';
+    protected $signature = 'billing:disable-unpaid {--force : Bypass date and cache checks}';
     protected $description = 'Disable WiFi services for customers who have not paid by the isolir date';
 
     public function handle(\App\Services\MikrotikService $mikrotikService)
     {
-        $enabled = \App\Models\Setting::get('billing_auto_isolir_enabled', '1');
-        $isolirDate = (int) \App\Models\Setting::get('billing_isolir_date', '10');
-        $isolirHour = (int) \App\Models\Setting::get('billing_isolir_hour', '12');
+        $isForce = $this->option('force');
 
-        if ($enabled != '1') {
-            $this->info('Auto-isolation is disabled in settings.');
-            return;
-        }
+        if (!$isForce) {
+            $cacheKey = 'disable_unpaid_services_last_run';
+            if (\Illuminate\Support\Facades\Cache::has($cacheKey)) {
+                $this->info('DisableUnpaidServices has already run in the last 2 minutes. Exiting to prevent duplication.');
+                return;
+            }
+            \Illuminate\Support\Facades\Cache::put($cacheKey, true, 120);
 
-        // Hanya jalankan jika tanggal hari ini >= tanggal isolir
-        if (now()->day < $isolirDate) {
-            $this->info("Hari ini tgl " . now()->day . ". Isolir dijadwalkan tgl {$isolirDate}. Dilewati.");
-            return;
-        }
+            $enabled = \App\Models\Setting::get('billing_auto_isolir_enabled', '1');
+            $isolirDate = (int) \App\Models\Setting::get('billing_isolir_date', '10');
+            $isolirHour = (int) \App\Models\Setting::get('billing_isolir_hour', '12');
 
-        // Jika tepat di tanggal isolir, tunggu sampai jam yang ditentukan
-        if (now()->day == $isolirDate && now()->hour < $isolirHour) {
-            $this->info("Hari ini tgl isolir, tapi baru " . now()->format('H:i') . ". Menunggu jam {$isolirHour}:00.");
-            return;
+            if ($enabled != '1') {
+                $this->info('Auto-isolation is disabled in settings.');
+                return;
+            }
+
+            // Hanya jalankan jika tanggal hari ini >= tanggal isolir
+            if (now()->day < $isolirDate) {
+                $this->info("Hari ini tgl " . now()->day . ". Isolir dijadwalkan tgl {$isolirDate}. Dilewati.");
+                return;
+            }
+
+            // Jika tepat di tanggal isolir, tunggu sampai jam yang ditentukan
+            if (now()->day == $isolirDate && now()->hour < $isolirHour) {
+                $this->info("Hari ini tgl isolir, tapi baru " . now()->format('H:i') . ". Menunggu jam {$isolirHour}:00.");
+                return;
+            }
         }
 
         $this->info('Memeriksa tagihan yang belum dibayar...');

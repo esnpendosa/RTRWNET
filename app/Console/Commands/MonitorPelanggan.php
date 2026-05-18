@@ -15,6 +15,13 @@ class MonitorPelanggan extends Command
 
     public function handle(MikrotikService $mikrotik)
     {
+        $cacheKey = 'monitor_pelanggan_last_run';
+        if (\Illuminate\Support\Facades\Cache::has($cacheKey)) {
+            $this->info('MonitorPelanggan has already run in the last 2 minutes. Exiting to prevent duplication.');
+            return;
+        }
+        \Illuminate\Support\Facades\Cache::put($cacheKey, true, 120);
+
         $pelanggans = Pelanggan::where('is_active', true)->whereNotNull('id_router')->get();
         $adminNum = env('WHATSAPP_ADMIN_NUMBER', '6282187827382');
         $waClient = new WhatsappClient();
@@ -29,6 +36,10 @@ class MonitorPelanggan extends Command
             // 1. Coba cari IP Aktif dari Mikrotik (jika ada username)
             if ($mUser) {
                 $currentIp = $mikrotik->getPelangganActiveIp($router, $mUser, $p->mikrotik_type);
+                if ($currentIp === 'ROUTER_OFFLINE') {
+                    $this->warn("Skipping monitoring check for customer {$p->nama_pelanggan} because the router {$router->nama_router} connection is offline/failed.");
+                    continue;
+                }
             }
 
             // 2. Jika tidak ketemu di Mikrotik, tapi ada IP Manual, coba ping IP Manual tersebut
@@ -53,15 +64,18 @@ class MonitorPelanggan extends Command
                 $msg .= "--------------------------\n";
                 $msg .= "Mohon cek koneksi atau hubungi pelanggan.";
 
-                // Notify Admin
-                $waClient->sendMessage($adminNum . "@s.whatsapp.net", ['text' => $msg]);
+                // Notify Admin (Tetap aktif agar admin tahu status jaringan)
+                $targetJid = str_contains($adminNum, '@') ? $adminNum : $adminNum . "@s.whatsapp.net";
+                $waClient->sendMessage($targetJid, ['text' => $msg]);
                 
-                // Optional: Notify Customer
+                // JANGAN kirim notifikasi offline ke pelanggan agar tidak risih
+                /*
                 if ($p->no_wa) {
                     $waClient->sendMessage($p->no_wa, ['text' => "Halo Kak " . $p->nama_pelanggan . ", sistem kami mendeteksi koneksi internet Anda terputus. Tim kami sedang mengecek kendala ini. Mohon tunggu sebentar nggih."]);
                 }
+                */
 
-                Log::info("Notification sent for offline customer: " . $p->nama_pelanggan);
+                Log::info("Offline alert sent to Admin for customer: " . $p->nama_pelanggan);
             } 
             // If status changed from Offline to Online
             elseif (!$p->last_online_status && $isOnline) {
@@ -72,7 +86,9 @@ class MonitorPelanggan extends Command
                 $msg .= "IP Baru: " . $currentIp . "\n";
                 $msg .= "Waktu: " . now()->format('H:i:s d/m/Y');
 
-                $waClient->sendMessage($adminNum . "@s.whatsapp.net", ['text' => $msg]);
+                // Notify Admin (Tetap aktif agar admin tahu status jaringan)
+                $targetJid = str_contains($adminNum, '@') ? $adminNum : $adminNum . "@s.whatsapp.net";
+                $waClient->sendMessage($targetJid, ['text' => $msg]);
             }
 
             // Update database

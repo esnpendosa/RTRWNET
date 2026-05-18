@@ -36,12 +36,14 @@ app.use(express.json({ limit: '50mb' }));
 const PORT         = process.env.BOT_PORT   || 3000;
 const BOT_SECRET   = process.env.BOT_SECRET || 'rozitech-bot-secret-2024';
 const LARAVEL_URL  = process.env.APP_URL    || 'http://127.0.0.1:8000';
+const ALLOWED_SESSIONS = (process.env.ALLOWED_SESSIONS || 'main').split(',').map(s => s.trim());
 const SESSIONS_PATH = path.resolve(__dirname, 'sessions');
 
 if (!fs.existsSync(SESSIONS_PATH)) fs.mkdirSync(SESSIONS_PATH, { recursive: true });
 
 const sessions      = new Map(); // id -> sock
 const sessionStates = new Map(); // id -> { id, status, user, qr, ... }
+const sessionContacts = new Map(); // id -> [jid1, jid2, ...]
 const processedMessages = new Set(); // Cache for message IDs to prevent loops
 
 // ─── Middleware ────────────────────────────────────────────────────────────────
@@ -113,6 +115,26 @@ async function startSession(id, opts = {}) {
     sessions.set(cleanId, sock);
     sessionStates.set(cleanId, { id: cleanId, status: 'connecting' });
 
+    // Load saved contacts from local file if exists to prevent empty list on PM2 reloads
+    const contactsFile = path.join(SESSIONS_PATH, `${cleanId}_contacts.json`);
+    if (fs.existsSync(contactsFile)) {
+        try {
+            const list = JSON.parse(fs.readFileSync(contactsFile, 'utf-8'));
+            sessionContacts.set(cleanId, list);
+            console.log(`[STORE] Berhasil memuat ${list.length} kontak tersimpan dari berkas untuk sesi ${cleanId}`);
+        } catch (e) {
+            console.error(`[STORE] Gagal memuat kontak dari berkas: ${e.message}`);
+        }
+    }
+
+    const saveContactsToFile = (id, list) => {
+        try {
+            fs.writeFileSync(path.join(SESSIONS_PATH, `${id}_contacts.json`), JSON.stringify(list, null, 2));
+        } catch (e) {
+            console.error(`[STORE] Gagal menyimpan kontak ke berkas: ${e.message}`);
+        }
+    };
+
     sock.ev.on('creds.update', saveCreds);
 
     // Helper: Lapor status ke Laravel
@@ -181,6 +203,46 @@ async function startSession(id, opts = {}) {
         }
     });
 
+    // ── Contacts & History Sync ──
+    sock.ev.on('messaging-history.set', ({ contacts }) => {
+        if (contacts) {
+            const list = contacts.map(c => c.id).filter(id => id && id.endsWith('@s.whatsapp.net'));
+            sessionContacts.set(cleanId, list);
+            saveContactsToFile(cleanId, list);
+            console.log(`[STORE] Berhasil menyimpan ${list.length} kontak dari whatsapp untuk sesi ${cleanId}`);
+        }
+    });
+
+    sock.ev.on('contacts.upsert', (newContacts) => {
+        const existing = sessionContacts.get(cleanId) || [];
+        let updated = false;
+        newContacts.forEach(c => {
+            if (c.id && c.id.endsWith('@s.whatsapp.net') && !existing.includes(c.id)) {
+                existing.push(c.id);
+                updated = true;
+            }
+        });
+        if (updated) {
+            sessionContacts.set(cleanId, existing);
+            saveContactsToFile(cleanId, existing);
+        }
+    });
+
+    sock.ev.on('contacts.update', (updates) => {
+        const existing = sessionContacts.get(cleanId) || [];
+        let updated = false;
+        updates.forEach(c => {
+            if (c.id && c.id.endsWith('@s.whatsapp.net') && !existing.includes(c.id)) {
+                existing.push(c.id);
+                updated = true;
+            }
+        });
+        if (updated) {
+            sessionContacts.set(cleanId, existing);
+            saveContactsToFile(cleanId, existing);
+        }
+    });
+
     // ── Incoming Messages → Forward to Laravel ──
     sock.ev.on('messages.upsert', async ({ messages: msgs, type }) => {
         if (type !== 'notify') return;
@@ -239,6 +301,12 @@ async function startSession(id, opts = {}) {
                 } catch(e) {
                     console.error('[MEDIA/OCR] Gagal proses:', e.message);
                 }
+            } else if (msgType === 'locationMessage') {
+                const loc = msg.message.locationMessage;
+                textContent = `LOKASI_SHARE:${loc.degreesLatitude},${loc.degreesLongitude}`;
+            } else if (msgType === 'liveLocationMessage') {
+                const loc = msg.message.liveLocationMessage;
+                textContent = `LOKASI_SHARE:${loc.degreesLatitude},${loc.degreesLongitude}`;
             }
 
             const payload = {
@@ -307,6 +375,25 @@ async function loadExistingSessions() {
 /** GET /sessions — daftar semua sesi */
 app.get('/sessions', (req, res) => {
     res.json(Array.from(sessionStates.values()));
+});
+
+/** GET /groups — daftar semua grup WA */
+app.get('/groups', requireSecret, async (req, res) => {
+    let targetId = Array.from(sessions.keys()).find(id => sessionStates.get(id)?.status === 'open');
+    if (!targetId) {
+        return res.status(503).json({ error: 'Tidak ada sesi aktif yang tersedia' });
+    }
+    const sock = sessions.get(targetId);
+    try {
+        const groups = await sock.groupFetchAllParticipating();
+        const groupList = Object.values(groups).map(g => ({
+            id: g.id,
+            subject: g.subject
+        }));
+        res.json(groupList);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 /** GET /session/:id — status satu sesi */
@@ -421,17 +508,29 @@ app.post('/send-message', requireSecret, async (req, res) => {
     if (!phone) return res.status(400).json({ error: 'phone wajib diisi' });
 
     // Pilih sesi
-    let targetId = sessionId || Array.from(sessions.keys())[0];
-    if (!targetId) return res.status(404).json({ error: 'Tidak ada sesi aktif' });
+    let targetId = null;
+    if (sessionId && sessions.has(sessionId) && sessionStates.get(sessionId)?.status === 'open') {
+        targetId = sessionId;
+    } else {
+        targetId = Array.from(sessions.keys()).find(id => sessionStates.get(id)?.status === 'open');
+    }
+
+    if (!targetId) {
+        return res.status(503).json({ error: 'Tidak ada sesi aktif yang tersedia' });
+    }
 
     const sock  = sessions.get(targetId);
     const state = sessionStates.get(targetId);
 
-    if (!sock)                      return res.status(404).json({ error: `Sesi '${targetId}' tidak ditemukan` });
-    if (state?.status !== 'open')   return res.status(400).json({ error: `Sesi '${targetId}' belum terhubung (status: ${state?.status})` });
-
-    const cleanPhone = phone.replace(/[^0-9]/g, '');
-    const jid        = `${cleanPhone}@s.whatsapp.net`;
+    let jid;
+    let cleanPhone = '';
+    if (phone.endsWith('@g.us')) {
+        jid = phone;
+        cleanPhone = phone;
+    } else {
+        cleanPhone = phone.replace(/[^0-9]/g, '');
+        jid = `${cleanPhone}@s.whatsapp.net`;
+    }
 
     try {
         // ── Kirim File via URL ──
@@ -470,6 +569,85 @@ app.post('/send-message', requireSecret, async (req, res) => {
         return res.status(400).json({ error: 'Butuh message, media+filename, atau url+filename' });
     } catch (e) {
         console.error('[SEND] Error:', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+/**
+ * POST /send-status — posting status WA (Stories)
+ * Body: { message, media, mimetype, caption, sessionId }
+ */
+app.post('/send-status', requireSecret, async (req, res) => {
+    const { message, media, mimetype, caption, sessionId } = req.body;
+
+    // Pilih sesi
+    let targetId = null;
+    if (sessionId && sessions.has(sessionId) && sessionStates.get(sessionId)?.status === 'open') {
+        targetId = sessionId;
+    } else {
+        targetId = Array.from(sessions.keys()).find(id => sessionStates.get(id)?.status === 'open');
+    }
+
+    if (!targetId) {
+        return res.status(503).json({ error: 'Tidak ada sesi aktif yang tersedia' });
+    }
+
+    const sock = sessions.get(targetId);
+    const jid  = 'status@broadcast';
+
+    const statusJidList = req.body.statusJidList || [];
+
+    // Auto-fetch all contacts saved in this session's phonebook memory
+    const savedContacts = sessionContacts.get(targetId) || [];
+    savedContacts.forEach(jid => {
+        if (!statusJidList.includes(jid)) {
+            statusJidList.push(jid);
+        }
+    });
+
+    if (sock.user && sock.user.id) {
+        const ownJid = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+        if (!statusJidList.includes(ownJid)) {
+            statusJidList.push(ownJid);
+        }
+    }
+
+    try {
+        const sendOptions = {
+            statusJidList: statusJidList,
+            broadcast: true
+        };
+
+        // ── Status Gambar/Video (Media) ──
+        if (media) {
+            const buffer = Buffer.from(media, 'base64');
+            const mime   = mimetype || 'image/jpeg';
+            
+            if (mime.startsWith('image/')) {
+                await sock.sendMessage(jid, {
+                    image: buffer,
+                    caption: caption || message || ''
+                }, sendOptions);
+            } else if (mime.startsWith('video/')) {
+                await sock.sendMessage(jid, {
+                    video: buffer,
+                    caption: caption || message || ''
+                }, sendOptions);
+            } else {
+                return res.status(400).json({ error: 'Mimetype media status harus berupa image/ atau video/' });
+            }
+            return res.json({ success: true });
+        }
+
+        // ── Status Teks ──
+        if (message) {
+            await sock.sendMessage(jid, { text: message }, sendOptions);
+            return res.json({ success: true });
+        }
+
+        return res.status(400).json({ error: 'Butuh message atau media untuk update status' });
+    } catch (e) {
+        console.error('[STATUS] Error:', e.message);
         res.status(500).json({ error: e.message });
     }
 });

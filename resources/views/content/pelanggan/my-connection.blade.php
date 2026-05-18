@@ -195,7 +195,7 @@
                 .catch(err => console.error('Traffic update error:', err));
         }
 
-        setInterval(updateTraffic, 2000);
+        setInterval(updateTraffic, 5000);
     });
 </script>
 @endsection

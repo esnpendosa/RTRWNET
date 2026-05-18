@@ -11,12 +11,12 @@ return Application::configure(basePath: dirname(__DIR__))
     health: '/up',
   )
   ->withSchedule(function (\Illuminate\Console\Scheduling\Schedule $schedule) {
-      $schedule->command('billing:generate')->hourly();
-      $schedule->command('billing:disable-unpaid')->hourly();
-      $schedule->command('billing:enable-paid')->everyFiveMinutes(); // Auto-ON jika sudah bayar
-      $schedule->command('mikrotik:sync-all')->everyFiveMinutes();
-      $schedule->command('monitor:pelanggan')->everyFiveMinutes();
-      $schedule->command('bot:goodbye')->everyMinute();
+      $schedule->command('billing:disable-unpaid')->hourly()->withoutOverlapping();
+      $schedule->command('billing:enable-paid')->everyFiveMinutes()->withoutOverlapping(); // Auto-ON jika sudah bayar
+      $schedule->command('mikrotik:sync-all')->everyFiveMinutes()->withoutOverlapping();
+      $schedule->command('monitor:pelanggan')->everyFiveMinutes()->withoutOverlapping();
+      $schedule->command('bot:goodbye')->everyMinute()->withoutOverlapping();
+      $schedule->command('status:publish')->everyMinute()->withoutOverlapping();
   })
   ->withMiddleware(function (Middleware $middleware) {
       $middleware->validateCsrfTokens(except: [

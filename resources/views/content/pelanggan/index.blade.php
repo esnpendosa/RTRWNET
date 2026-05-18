@@ -54,13 +54,11 @@
           <td>{{ $p->jumlah_device }}</td>
           <td><span class="badge bg-label-primary">{{ $p->paket ?? '-' }}</span></td>
           <td>
-            <form action="{{ route('pelanggan.toggle-status', $p->id_pelanggan) }}" method="POST">
+            <form action="{{ route('pelanggan.toggle-status', $p->id_pelanggan) }}" method="POST" class="d-inline">
               @csrf
-              <button type="submit" class="btn btn-sm p-0">
-                <span class="badge {{ $p->is_active ? 'bg-label-success' : 'bg-label-danger' }}">
-                  {{ $p->is_active ? 'Aktif' : 'Nonaktif' }}
-                </span>
-              </button>
+              <div class="form-check form-switch d-inline-block">
+                <input class="form-check-input" type="checkbox" role="switch" onchange="this.form.submit()" style="cursor: pointer; width: 2.5em; height: 1.25em;" {{ $p->is_active ? 'checked' : '' }} title="{{ $p->is_active ? 'Klik untuk Nonaktifkan' : 'Klik untuk Aktifkan' }}">
+              </div>
             </form>
           </td>
           <td>

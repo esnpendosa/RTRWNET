@@ -104,14 +104,16 @@ class WhatsappClient
         $filename = 'Nota-' . $pelanggan->kode_pelanggan . '-' . $tagihan->bulan . '-' . $tagihan->tahun . '.pdf';
 
         // Save to public storage for URL access (Manual save to avoid finfo error)
-        $storagePath = 'bukti_bayar/' . $filename;
-        $fullPath = storage_path('app/public/' . $storagePath);
-        if (!file_exists(dirname($fullPath))) {
-            mkdir(dirname($fullPath), 0755, true);
+        try {
+            $storagePath = 'bukti_bayar/' . $filename;
+            $fullPath = storage_path('app/public/' . $storagePath);
+            if (!file_exists(dirname($fullPath))) {
+                mkdir(dirname($fullPath), 0755, true);
+            }
+            file_put_contents($fullPath, $pdfContent);
+        } catch (\Exception $e) {
+            Log::warning("WhatsappClient: Could not save copy of PDF to storage: " . $e->getMessage());
         }
-        file_put_contents($fullPath, $pdfContent);
-        
-        $fileUrl = asset('storage/' . $storagePath);
 
         $monthIndo = [
             'January' => 'Januari', 'February' => 'Februari', 'March' => 'Maret', 
@@ -174,6 +176,38 @@ class WhatsappClient
             return $response->json();
         } catch (\Exception $e) {
             return ['error' => $e->getMessage()];
+        }
+    }
+
+    public function sendStatus($message, $mediaBase64 = null, $mimetype = 'image/jpeg', $caption = '', $statusJidList = [])
+    {
+        Log::info("WhatsappClient: Attempting to update WA Status");
+        try {
+            $payload = [
+                'message' => $message,
+                'statusJidList' => $statusJidList,
+            ];
+            
+            if ($mediaBase64) {
+                $payload['media'] = $mediaBase64;
+                $payload['mimetype'] = $mimetype;
+                $payload['caption'] = $caption ?: $message;
+            }
+
+            $response = Http::timeout(30)
+                ->withHeaders(['X-Bot-Secret' => $this->secret()])
+                ->post($this->baseUrl . '/send-status', $payload);
+
+            if (!$response->successful()) {
+                Log::error("WhatsappClient Status Error Response: " . $response->status() . " - " . $response->body());
+                return false;
+            }
+
+            Log::info("WhatsappClient: WA Status updated successfully");
+            return true;
+        } catch (\Exception $e) {
+            Log::error("WhatsappClient Status Connection Error: " . $e->getMessage());
+            return false;
         }
     }
 }

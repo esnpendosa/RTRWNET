@@ -11,8 +11,25 @@ use Illuminate\Support\Facades\Cache;
 
 class MikrotikService
 {
-    public function getConnection(Router $router, $retries = 2)
+    public function markConnectionFailed(Router $router, $error = '')
     {
+        $cacheKey = "mikrotik_connection_status_" . $router->id_router;
+        
+        // Cache failure for 15 seconds to prevent overload and log flooding
+        Cache::put($cacheKey, 'failed', 15);
+
+        // Update status in DB
+        $router->update(['status_koneksi' => 'Simulated (Error: ' . substr($error, 0, 30) . ')']);
+        \Log::warning("Mikrotik Router (" . $router->nama_router . ") marked as failed in cache for 15s due to error: " . $error);
+    }
+
+    public function getConnection(Router $router, $retries = 1, $bypassCache = false)
+    {
+        $cacheKey = "mikrotik_connection_status_" . $router->id_router;
+        if (!$bypassCache && Cache::get($cacheKey) === 'failed') {
+            return null; // Immediately return if connection was marked as failed recently
+        }
+
         $attempt = 0;
         $lastError = '';
 
@@ -24,8 +41,8 @@ class MikrotikService
                     'user'    => $router->username,
                     'pass'    => decrypt($router->password_encrypted),
                     'port'    => (int) ($router->api_port ?? 8728),
-                    'timeout' => 15, // Ditingkatkan ke 15 detik untuk stabilitas
-                    'attempts' => 2,
+                    'timeout' => 10, // Menggunakan 10 detik agar pembacaan kueri stabil & andal
+                    'attempts' => 1,
                     'delay'    => 1,
                 ]);
 
@@ -37,15 +54,14 @@ class MikrotikService
                 $attempt++;
                 
                 if ($attempt <= $retries) {
-                    usleep(1000000 * $attempt); // Wait 1s, 2s... before retry
+                    usleep(500000); // Tunggu 0.5 detik sebelum retry
                     continue;
                 }
             }
         }
 
-        // Jika semua percobaan gagal, tandai router sebagai Simulated/Error
-        $router->update(['status_koneksi' => 'Simulated (Error: ' . substr($lastError, 0, 30) . ')']);
-        \Log::error("Mikrotik Connection Final Failure (" . $router->nama_router . ") at " . $router->ip_host . ": " . $lastError);
+        // Cache kegagalan koneksi
+        $this->markConnectionFailed($router, $lastError);
         
         return null;
     }
@@ -53,7 +69,7 @@ class MikrotikService
     public function syncStats(Router $router)
     {
         try {
-            $client = $this->getConnection($router);
+            $client = $this->getConnection($router, 1, true);
             
             if (!$client) {
                 // Status sudah diupdate oleh getConnection jika gagal
@@ -79,11 +95,8 @@ class MikrotikService
             ]);
 
             return true;
-        } catch (Exception $e) {
-            // Hanya update jika belum ditandai Simulated oleh getConnection
-            if (!str_contains($router->status_koneksi, 'Simulated')) {
-                $router->update(['status_koneksi' => 'Error: ' . substr($e->getMessage(), 0, 50)]);
-            }
+        } catch (\Exception $e) {
+            $this->markConnectionFailed($router, $e->getMessage());
             return false;
         }
     }
@@ -99,7 +112,8 @@ class MikrotikService
             $query->equal('count', $count);
             
             return $client->query($query)->read();
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
+            $this->markConnectionFailed($router, $e->getMessage());
             return null;
         }
     }
@@ -115,9 +129,43 @@ class MikrotikService
             $query->equal('once', '');
             
             return $client->query($query)->read();
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
+            $this->markConnectionFailed($router, $e->getMessage());
             return null;
         }
+    }
+
+    public function findSimpleQueue($client, $username, $ipAddress = null, Router $router = null)
+    {
+        try {
+            $query = new Query('/queue/simple/print');
+            $query->equal('.proplist', '.id,name,target,comment,max-limit');
+            $queues = $client->query($query)->read();
+
+            if (empty($queues)) return null;
+
+            $searchKey = strtolower(trim($username));
+            $customerIp = $ipAddress ? trim($ipAddress) : null;
+
+            foreach ($queues as $q) {
+                $qName = strtolower($q['name'] ?? '');
+                $qComment = strtolower($q['comment'] ?? '');
+                $qTarget = $q['target'] ?? '';
+                
+                if ($qName === $searchKey || $qComment === $searchKey || 
+                    str_contains($qName, $searchKey) || 
+                    str_contains($qComment, $searchKey) ||
+                    ($customerIp && str_contains($qTarget, $customerIp))) {
+                    return $q;
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::error("Mikrotik findSimpleQueue Error: " . $e->getMessage());
+            if ($router) {
+                $this->markConnectionFailed($router, $e->getMessage());
+            }
+        }
+        return null;
     }
 
     public function getQueueTraffic(Router $router, $name, \App\Models\Pelanggan $pelanggan = null)
@@ -126,22 +174,12 @@ class MikrotikService
             $client = $this->getConnection($router);
             if (!$client) return null;
 
-            // Cari berdasarkan Nama (Paling Cepat)
-            $query = new Query('/queue/simple/print');
-            $query->where('name', $name);
-            $queues = $client->query($query)->read();
+            $ipAddress = $pelanggan ? $pelanggan->ip_address : null;
+            $q = $this->findSimpleQueue($client, $name, $ipAddress, $router);
 
-            // Jika tidak ketemu, cari berdasarkan IP (Jika ada)
-            if (empty($queues) && $pelanggan && $pelanggan->ip_address) {
-                $query = new Query('/queue/simple/print');
-                $query->where('target', $pelanggan->ip_address . '/32');
-                $queues = $client->query($query)->read();
-            }
-
-            if (empty($queues)) return null;
+            if (!$q) return null;
 
             // Ambil statistik real-time untuk queue yang ditemukan
-            $q = $queues[0];
             $statQuery = new Query('/queue/simple/print');
             $statQuery->equal('.id', $q['.id']);
             $statQuery->equal('stats', '');
@@ -155,8 +193,9 @@ class MikrotikService
                 ];
             }
             return null;
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             \Log::error("Mikrotik getQueueTraffic Error: " . $e->getMessage());
+            $this->markConnectionFailed($router, $e->getMessage());
             return null;
         }
     }
@@ -165,7 +204,7 @@ class MikrotikService
     {
         try {
             $client = $this->getConnection($router);
-            if (!$client) return null;
+            if (!$client) return 'ROUTER_OFFLINE';
 
             $path = ($type === 'pppoe') ? '/ppp/active' : '/ip/hotspot/active';
             
@@ -188,8 +227,10 @@ class MikrotikService
             }
 
             return null;
-        } catch (Exception $e) {
-            return null;
+        } catch (\Exception $e) {
+            \Log::error("Mikrotik getPelangganActiveIp Error: " . $e->getMessage());
+            $this->markConnectionFailed($router, $e->getMessage());
+            return 'ROUTER_OFFLINE';
         }
     }
 
@@ -257,27 +298,7 @@ class MikrotikService
                     'active' => $active[0] ?? null,
                 ];
             } elseif ($type === 'static') {
-                $query = new Query('/queue/simple/print');
-                $query->equal('stats', '');
-                $queues = $client->query($query)->read();
-                
-                $targetQueue = null;
-                $searchKey = strtolower(trim($username));
-                $customerIp = $pelanggan ? trim($pelanggan->ip_address) : null;
-
-                foreach ($queues as $q) {
-                    $qName = strtolower($q['name'] ?? '');
-                    $qComment = strtolower($q['comment'] ?? '');
-                    $qTarget = $q['target'] ?? '';
-                    
-                    if ($qName === $searchKey || $qComment === $searchKey || 
-                        str_contains($qName, $searchKey) || 
-                        str_contains($qComment, $searchKey) ||
-                        ($customerIp && str_contains($qTarget, $customerIp))) {
-                        $targetQueue = $q;
-                        break;
-                    }
-                }
+                $targetQueue = $this->findSimpleQueue($client, $username, $pelanggan ? $pelanggan->ip_address : null, $router);
 
                 $address = $targetQueue['target'] ?? ($pelanggan ? $pelanggan->ip_address : 'N/A');
                 $address = str_replace('/32', '', $address);
@@ -339,7 +360,7 @@ class MikrotikService
     public function setSecretStatus(Router $router, $username, $type, $disable, $ip = null)
     {
         try {
-            $client = $this->getConnection($router);
+            $client = $this->getConnection($router, 1, true);
             if (!$client) {
                 \Log::error("Mikrotik setSecretStatus: Connection failed to router {$router->nama_router}");
                 return false;
@@ -392,24 +413,10 @@ class MikrotikService
                 }
             } elseif ($type === 'static') {
                 // 1. Update Simple Queue (Limit Speed)
-                $query = new Query('/queue/simple/print');
-                $query->where('name', $username);
-                $resp = $client->query($query)->read();
+                $targetQueue = $this->findSimpleQueue($client, $username, $ip, $router);
                 
-                if (empty($resp) && $ip) {
-                    $query = new Query('/queue/simple/print');
-                    $query->where('target', $ip . '/32');
-                    $resp = $client->query($query)->read();
-                    
-                    if (empty($resp)) {
-                        $query = new Query('/queue/simple/print');
-                        $query->where('target', $ip);
-                        $resp = $client->query($query)->read();
-                    }
-                }
-
-                if (!empty($resp)) {
-                    $id = $resp[0]['.id'];
+                if ($targetQueue) {
+                    $id = $targetQueue['.id'];
                     if ($disable) {
                         // Jangan di-disable antriannya (karena malah jadi loss), tapi limit ke 1kbps
                         $client->query((new Query('/queue/simple/set'))
@@ -424,7 +431,7 @@ class MikrotikService
                         $client->query((new Query('/queue/simple/set'))
                             ->equal('.id', $id)
                             ->equal('disabled', 'no'))->read();
-                        // Catatan: Speed asli akan kembali jika router di-sync ulang atau admin mengubahnya
+                        // Catatan: Speed asli akan kembali jika router di-sync ulang or admin mengubahnya
                     }
                     $found = true;
                 }
@@ -509,8 +516,9 @@ class MikrotikService
             }
 
             return true;
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             \Log::error("Mikrotik setSecretStatus Error for user {$username} on router {$router->nama_router}: " . $e->getMessage());
+            $this->markConnectionFailed($router, $e->getMessage());
             return false;
         }
     }

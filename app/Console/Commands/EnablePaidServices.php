@@ -6,18 +6,34 @@ use Illuminate\Console\Command;
 
 class EnablePaidServices extends Command
 {
-    protected $signature = 'billing:enable-paid';
+    protected $signature = 'billing:enable-paid {--force : Bypass cache checks}';
     protected $description = 'Enable WiFi services for customers who have paid their bill';
 
     public function handle(\App\Services\MikrotikService $mikrotikService)
     {
+        $isForce = $this->option('force');
+
+        if (!$isForce) {
+            $cacheKey = 'enable_paid_services_last_run';
+            if (\Illuminate\Support\Facades\Cache::has($cacheKey)) {
+                $this->info('EnablePaidServices has already run in the last 2 minutes. Exiting to prevent duplication.');
+                return;
+            }
+            \Illuminate\Support\Facades\Cache::put($cacheKey, true, 120);
+        }
+
         $this->info('Memeriksa tagihan yang sudah dibayar untuk mengaktifkan layanan...');
 
         $currentMonth = now()->month;
         $currentYear = now()->year;
 
         // Cari pelanggan yang tidak aktif tapi sudah tidak punya tunggakan lagi (bulan ini atau sebelumnya)
+        // Dan pastikan mereka memang memiliki tagihan aktif bulan ini (tidak dinonaktifkan secara manual/permanen tanpa tagihan)
         $paidPelanggan = \App\Models\Pelanggan::where('is_active', false)
+            ->whereHas('tagihan', function ($query) use ($currentMonth, $currentYear) {
+                $query->where('tahun', $currentYear)
+                      ->where('bulan', $currentMonth);
+            })
             ->whereDoesntHave('tagihan', function ($query) use ($currentMonth, $currentYear) {
                 $query->where('status', 'unpaid')
                       ->where(function($q) use ($currentMonth, $currentYear) {

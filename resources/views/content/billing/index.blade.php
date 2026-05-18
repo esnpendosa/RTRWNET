@@ -16,10 +16,22 @@
         $totalTagihan = \App\Models\Tagihan::whereHas('pelanggan', fn($q) => $q->where('id_user', $user->id))->count();
         $totalPaid = \App\Models\Tagihan::where('status', 'paid')->whereHas('pelanggan', fn($q) => $q->where('id_user', $user->id))->count();
         $totalUnpaid = \App\Models\Tagihan::where('status', 'unpaid')->whereHas('pelanggan', fn($q) => $q->where('id_user', $user->id))->count();
+        
+        $totalCash = \App\Models\Tagihan::where('status', 'paid')->where('metode_pembayaran', 'Cash')->whereHas('pelanggan', fn($q) => $q->where('id_user', $user->id))->sum('jumlah');
+        $totalTf = \App\Models\Tagihan::where('status', 'paid')->where('metode_pembayaran', '!=', 'Cash')->whereHas('pelanggan', fn($q) => $q->where('id_user', $user->id))->sum('jumlah');
+        
+        $countCash = \App\Models\Tagihan::where('status', 'paid')->where('metode_pembayaran', 'Cash')->whereHas('pelanggan', fn($q) => $q->where('id_user', $user->id))->count();
+        $countTf = \App\Models\Tagihan::where('status', 'paid')->where('metode_pembayaran', '!=', 'Cash')->whereHas('pelanggan', fn($q) => $q->where('id_user', $user->id))->count();
     } else {
         $totalTagihan = \App\Models\Tagihan::count();
         $totalPaid = \App\Models\Tagihan::where('status', 'paid')->count();
         $totalUnpaid = \App\Models\Tagihan::where('status', 'unpaid')->count();
+        
+        $totalCash = \App\Models\Tagihan::where('status', 'paid')->where('metode_pembayaran', 'Cash')->sum('jumlah');
+        $totalTf = \App\Models\Tagihan::where('status', 'paid')->where('metode_pembayaran', '!=', 'Cash')->sum('jumlah');
+        
+        $countCash = \App\Models\Tagihan::where('status', 'paid')->where('metode_pembayaran', 'Cash')->count();
+        $countTf = \App\Models\Tagihan::where('status', 'paid')->where('metode_pembayaran', '!=', 'Cash')->count();
     }
 @endphp
 
@@ -70,6 +82,40 @@
                 <p class="mb-0">
                     <small class="text-danger fw-semibold">{{ $totalUnpaid }}</small>
                     <small class="text-muted"> perlu ditindaklanjuti</small>
+                </p>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-sm-6 col-lg-6 mb-3 mb-sm-0">
+        <div class="card card-border-shadow-success h-100 shadow-sm">
+            <div class="card-body">
+                <div class="d-flex align-items-center mb-2 pb-1">
+                    <div class="avatar me-2">
+                        <span class="avatar-initial rounded bg-label-success"><i class="bx bx-money text-success" style="font-size: 1.5rem;"></i></span>
+                    </div>
+                    <h4 class="ms-1 mb-0 text-success fw-bold">Rp {{ number_format($totalCash, 0, ',', '.') }}</h4>
+                </div>
+                <p class="mb-1 fw-semibold text-dark">Total Pembayaran Cash</p>
+                <p class="mb-0">
+                    <small class="text-muted">Diterima dari <strong>{{ $countCash }}</strong> tagihan tunai lunas</small>
+                </p>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-lg-6">
+        <div class="card card-border-shadow-info h-100 shadow-sm">
+            <div class="card-body">
+                <div class="d-flex align-items-center mb-2 pb-1">
+                    <div class="avatar me-2">
+                        <span class="avatar-initial rounded bg-label-info"><i class="bx bx-credit-card-front text-info" style="font-size: 1.5rem;"></i></span>
+                    </div>
+                    <h4 class="ms-1 mb-0 text-info fw-bold">Rp {{ number_format($totalTf, 0, ',', '.') }}</h4>
+                </div>
+                <p class="mb-1 fw-semibold text-dark">Total Pembayaran Transfer / Gateway</p>
+                <p class="mb-0">
+                    <small class="text-muted">Diterima dari <strong>{{ $countTf }}</strong> tagihan non-cash lunas</small>
                 </p>
             </div>
         </div>
@@ -259,6 +305,9 @@
                         @if($t->status == 'paid')
                             <span class="badge bg-label-success">Lunas</span>
                             <br><small class="text-muted">{{ $t->paid_at }} via {{ $t->metode_pembayaran ?? 'System' }}</small>
+                            @if($t->bukti_bayar)
+                                <br><a href="{{ asset('storage/' . $t->bukti_bayar) }}" target="_blank" class="small text-info"><i class='bx bx-image-alt'></i> Lihat Bukti TF</a>
+                            @endif
                         @elseif($t->status == 'pending' || ($t->status == 'unpaid' && $t->bukti_bayar))
                             <span class="badge bg-label-info">Menunggu Verifikasi</span>
                             @if($t->bukti_bayar)
@@ -271,6 +320,15 @@
                         @endif
                     </td>
                     <td>
+                        @if($t->status !== 'paid' && auth()->user()->id_role == 1)
+                        <form action="{{ route('billing.pay-cash', $t->id_tagihan) }}" method="POST" style="display:inline-block;" class="me-1" onsubmit="return confirm('Konfirmasi pembayaran Cash (Tunai) untuk pelanggan {{ $t->pelanggan->nama_pelanggan }}?')">
+                            @csrf
+                            <button type="submit" class="btn btn-sm btn-success shadow-sm" title="Terima Pembayaran Tunai (Cash)">
+                                <i class="bx bx-money me-1"></i> Bayar Cash
+                            </button>
+                        </form>
+                        @endif
+
                         @if($t->status == 'unpaid' && !$t->bukti_bayar)
                             <div class="btn-group">
                                 @if($gwEnabled)
@@ -296,13 +354,23 @@
                             </button>
                             @endif
                         @else
-                            <div class="btn-group">
-                                <button class="btn btn-sm btn-outline-success" disabled>
-                                    <i class="bx bx-check-circle me-1"></i> Selesai
-                                </button>
-                                <a href="{{ route('billing.receipt.pdf', $t->id_tagihan) }}" class="btn btn-sm btn-info" title="Download Nota PDF">
-                                    <i class="bx bx-file"></i> Nota PDF
-                                </a>
+                            <div class="d-inline-flex gap-1">
+                                <div class="btn-group">
+                                    <button class="btn btn-sm btn-outline-success" disabled>
+                                        <i class="bx bx-check-circle me-1"></i> Selesai
+                                    </button>
+                                    <a href="{{ route('billing.receipt.pdf', $t->id_tagihan) }}" class="btn btn-sm btn-info" title="Download Nota PDF">
+                                        <i class="bx bx-file"></i> Nota PDF
+                                    </a>
+                                </div>
+                                @if(auth()->user()->id_role == 1 && $t->pelanggan->no_wa)
+                                <form action="{{ route('billing.send-receipt-wa', $t->id_tagihan) }}" method="POST" style="display:inline-block;">
+                                    @csrf
+                                    <button type="submit" class="btn btn-sm btn-success" title="Kirim Ulang Kwitansi via WhatsApp">
+                                        <i class="bx bxl-whatsapp me-1"></i> Kirim WA
+                                    </button>
+                                </form>
+                                @endif
                             </div>
                         @endif
 

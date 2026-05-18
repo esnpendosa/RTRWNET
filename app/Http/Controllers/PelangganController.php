@@ -253,15 +253,15 @@ class PelangganController extends Controller
             // 1. Prioritas Tertinggi: Perbaikan (Biru) - Ada tiket aktif
             $hasTicket = $p->tiket->whereIn('status', ['open', 'pending', 'proses'])->count() > 0;
             
-            // 2. Timeout (Merah) - Ada tagihan belum bayar (mendukung 'unpaid' atau 'belum_bayar')
-            $hasUnpaidBill = $p->tagihan->whereIn('status', ['unpaid', 'belum_bayar'])->count() > 0;
+            // 2. Timeout (Merah) - Ada tagihan belum bayar ATAU pelanggan nonaktif
+            $isIsolated = ($p->is_active == 0) || ($p->tagihan->whereIn('status', ['unpaid', 'belum_bayar'])->count() > 0);
 
             // 3. Offline (Kuning) - Status ping terakhir offline (mendukung boolean 0/false atau string 'offline')
             $isOffline = (!$p->last_online_status || $p->last_online_status === 'offline' || $p->last_online_status == 0 || $p->last_online_status === false);
 
             if ($hasTicket) {
                 $status = 'perbaikan';
-            } elseif ($hasUnpaidBill) {
+            } elseif ($isIsolated) {
                 $status = 'timeout';
             } elseif ($isOffline) {
                 $status = 'offline';
@@ -374,10 +374,15 @@ class PelangganController extends Controller
     public function import(Request $request)
     {
         $request->validate([
-            'file' => 'required|mimes:xlsx,xls'
+            'file' => 'required'
         ]);
 
         $file = $request->file('file');
+        $extension = strtolower($file->getClientOriginalExtension());
+        $allowedExtensions = ['xlsx', 'xls'];
+        if (!in_array($extension, $allowedExtensions)) {
+            return back()->withErrors(['file' => 'File harus berupa dokumen excel dengan format .xlsx atau .xls!']);
+        }
         $spreadsheet = IOFactory::load($file->getPathname());
         $sheet = $spreadsheet->getActiveSheet();
         $rows = $sheet->toArray();

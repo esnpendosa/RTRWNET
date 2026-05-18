@@ -40,6 +40,99 @@ class WhatsappController extends Controller
         $phoneNumber = explode('@', $sender)[0];
         $cleanPhone = substr($phoneNumber, -10);
 
+        // Auto-update BotResponse ID 6 response text to include the new instruction
+        $laporResponse = \App\Models\BotResponse::find(6);
+        if ($laporResponse && !str_contains($laporResponse->response, 'TROUBLE KODE_PELANGGAN')) {
+            $laporResponse->update([
+                'response' => "Mohon maaf atas ketidaknyamanannya kak 🙏\n\nSilakan coba langkah awal berikut:\n✅ Cek lampu modem — pastikan tidak ada lampu LOS yang merah.\n✅ Cabut adaptor modem dari listrik, tunggu 30–60 detik, lalu pasang kembali.\n✅ Tunggu hingga modem menyala normal (sekitar 2–3 menit).\n\nJika kendala internet masih sama silahkan ketik *TROUBLE KODE_PELANGGAN* (Contoh: *TROUBLE KTR01*) lalu share lokasi untuk penanganan Tim teknisi kami kak, terima kasih 😊"
+            ]);
+        }
+
+        $lowerMsg = trim(strtolower($request->message ?? ''));
+
+        // ── FLOW LOCATION SHARE RECEIVED ──
+        if (str_starts_with($lowerMsg, 'lokasi_share:')) {
+            $coords = str_replace('lokasi_share:', '', $lowerMsg);
+            $parts = explode(',', $coords);
+            if (count($parts) === 2) {
+                $lat = trim($parts[0]);
+                $lng = trim($parts[1]);
+                
+                // Check if this user has a pending trouble report in Cache
+                $troubleData = Cache::get("trouble_report_{$sender}");
+                
+                if ($troubleData) {
+                    // Update customer's latitude & longitude in database!
+                    $customer = \App\Models\Pelanggan::find($troubleData['customer_id']);
+                    if ($customer) {
+                        $customer->update([
+                            'latitude' => $lat,
+                            'longitude' => $lng
+                        ]);
+                    }
+                    
+                    // Format beautiful forward message to WhatsApp Group
+                    $groupJid = "120363154234417705@g.us";
+                    
+                    $msgGroup = "⚠️ *LAPORAN GANGGUAN PELANGGAN* ⚠️\n";
+                    $msgGroup .= "--------------------------------------\n";
+                    $msgGroup .= "Pelanggan : *{$troubleData['customer_name']}* ({$troubleData['customer_code']})\n";
+                    $msgGroup .= "No. HP    : {$troubleData['phone']}\n";
+                    $msgGroup .= "Status    : *GANGGUAN / OFFLINE*\n";
+                    $msgGroup .= "Waktu     : " . now()->format('H:i:s d/m/Y') . "\n";
+                    $msgGroup .= "--------------------------------------\n";
+                    $msgGroup .= "🗺️ *Lokasi Google Maps:*\n";
+                    $msgGroup .= "https://www.google.com/maps?q={$lat},{$lng}\n\n";
+                    $msgGroup .= "Mohon Tim Teknisi segera merespon dan melakukan penanganan di lapangan. Terima kasih.";
+                    
+                    // Send to group!
+                    try {
+                        $waClient = new \App\Services\WhatsappClient();
+                        $waClient->sendMessage($groupJid, ['text' => $msgGroup]);
+                    } catch (\Exception $e) {
+                        Log::error("Failed to forward trouble report to group: " . $e->getMessage());
+                    }
+                    
+                    // Clear cache state
+                    Cache::forget("trouble_report_{$sender}");
+                    
+                    $reply = "Terima kasih banyak Kak! 🙏\n\nLokasi Anda berhasil diverifikasi dan laporan gangguan Anda telah **diteruskan otomatis ke Tim Teknisi kami di Grup Perbaikan Internet**.\n\nPetugas kami akan segera meluncur ke lokasi Anda 🔧";
+                    $this->saveBotReply($remoteJid, $reply);
+                    return response()->json(['reply' => $reply]);
+                }
+            }
+        }
+
+        // ── FLOW GANGGUAN / TROUBLE REPORT ──
+        if (preg_match('/^(masih\s+)?(trouble|troble|trobel|gangguan)\s+(.+)$/i', $lowerMsg, $matches)) {
+            $customerCode = trim($matches[3]);
+            
+            // Check if customer exists in DB
+            $customer = \App\Models\Pelanggan::where('kode_pelanggan', $customerCode)
+                ->orWhere('id_pelanggan', $customerCode)
+                ->orWhere('mikrotik_username', $customerCode)
+                ->first();
+                
+            if ($customer) {
+                // Store in Cache for 30 minutes
+                Cache::put("trouble_report_{$sender}", [
+                    'customer_id' => $customer->id_pelanggan,
+                    'customer_code' => $customer->kode_pelanggan,
+                    'customer_name' => $customer->nama_pelanggan,
+                    'phone' => $phoneNumber,
+                    'timestamp' => now()->toDateTimeString()
+                ], 1800);
+                
+                $reply = "Baik Kak *{$customer->nama_pelanggan}*,\nLaporan gangguan Anda telah kami catat.\n\n📌 *Langkah terakhir:* Silakan **Share Lokasi (Bagikan Lokasi)** Anda sekarang di chat ini agar Tim Teknisi kami dapat langsung menuju ke lokasi Anda untuk penanganan.\n\nTerima kasih 🙏";
+                $this->saveBotReply($remoteJid, $reply);
+                return response()->json(['reply' => $reply]);
+            } else {
+                $reply = "Maaf Kak, ID/Kode Pelanggan *{$customerCode}* tidak terdaftar di sistem kami.\n\nSilakan cek kembali kode Anda (Contoh: *TROUBLE KTR01*) atau ketik *menu* untuk bantuan.";
+                $this->saveBotReply($remoteJid, $reply);
+                return response()->json(['reply' => $reply]);
+            }
+        }
+
         // 0. Handle Admin Training Command (!train)
         if ($this->handleTrainingCommand($request->message, $remoteJid, $request->pushName, true)) {
             return response()->json(['status' => 'trained']);
@@ -200,10 +293,6 @@ class WhatsappController extends Controller
     {
         Log::info("PING_DEBUG: TargetStr='$targetStr', Message='ping'");
 
-        $router = \App\Models\Router::first(); 
-        $host = $targetStr;
-        $pelangganInfo = "";
-
         $targetPelanggan = Pelanggan::where(function($q) use ($targetStr) {
                                         $q->where('kode_pelanggan', '=', $targetStr)
                                           ->orWhere('mikrotik_username', '=', $targetStr)
@@ -211,13 +300,22 @@ class WhatsappController extends Controller
                                         if (is_numeric($targetStr)) $q->orWhere('id_pelanggan', '=', $targetStr);
                                     })->first();
         
+        if ($targetPelanggan && $targetPelanggan->id_router) {
+            $router = $targetPelanggan->router;
+        } else {
+            $router = \App\Models\Router::first();
+        }
+
+        $host = $targetStr;
+        $pelangganInfo = "";
+        
         if ($targetPelanggan && $router) {
             $mUser = $targetPelanggan->mikrotik_username ?: $targetPelanggan->kode_pelanggan;
             
             // 1. Try to get IP from Mikrotik Active List
             $activeIp = $this->mikrotik->getPelangganActiveIp($router, $mUser, $targetPelanggan->mikrotik_type);
             
-            if ($activeIp) {
+            if ($activeIp && $activeIp !== 'ROUTER_OFFLINE') {
                 $host = $activeIp;
             } 
             // 2. Fallback for Static IP or Offline PPPOE (using DB IP)
@@ -227,68 +325,92 @@ class WhatsappController extends Controller
 
             // Pelanggan Info for the message
             $pelangganInfo = "Pelanggan: " . $targetPelanggan->nama_pelanggan . " (" . $targetPelanggan->kode_pelanggan . ")\n";
+            if (!empty($targetPelanggan->latitude) && !empty($targetPelanggan->longitude)) {
+                $pelangganInfo .= "📍 Maps: https://www.google.com/maps?q={$targetPelanggan->latitude},{$targetPelanggan->longitude}\n";
+            }
         }
         
         try {
+            $results = null;
             if ($router) {
                 $results = $this->mikrotik->ping($router, $host);
-                
-                if ($results && is_array($results)) {
-                    $received = 0;
-                    $avgTime = 0;
-                    $times = [];
+            }
+            
+            if ($results && is_array($results)) {
+                $received = 0;
+                $avgTime = 0;
+                $times = [];
 
-                    foreach ($results as $res) {
-                        // Check for various ways Mikrotik indicates success
-                        $status = strtolower($res['status'] ?? '');
-                        $hasTime = isset($res['time']);
-                        
-                        if ($status === 'ok' || str_contains($status, 'received') || $hasTime) {
-                            $received++;
-                            if ($hasTime) {
-                                // Extract numeric value from time (e.g. "15ms" -> 15)
-                                $timeVal = (int) preg_replace('/[^0-9]/', '', $res['time']);
-                                if ($timeVal > 0) $times[] = $timeVal;
-                            }
+                foreach ($results as $res) {
+                    // Check for various ways Mikrotik indicates success
+                    $status = strtolower($res['status'] ?? '');
+                    $hasTime = isset($res['time']);
+                    
+                    if ($status === 'ok' || str_contains($status, 'received') || $hasTime) {
+                        $received++;
+                        if ($hasTime) {
+                            // Extract numeric value from time (e.g. "15ms" -> 15)
+                            $timeVal = (int) preg_replace('/[^0-9]/', '', $res['time']);
+                            if ($timeVal > 0) $times[] = $timeVal;
                         }
                     }
+                }
 
-                    $isSuccess = ($received > 0);
-                    $avgTime = !empty($times) ? round(array_sum($times) / count($times)) : 0;
+                $isSuccess = ($received > 0);
+                $avgTime = !empty($times) ? round(array_sum($times) / count($times)) : 0;
 
-                    $reply = "📍 *Hasil Ping (Mikrotik)*\n--------------------------\n";
-                    if ($pelangganInfo) $reply .= $pelangganInfo;
-                    $reply .= "Target: $targetStr ($host)\n";
-                    
-                    if ($targetPelanggan) {
-                        $hasUnpaid = DB::table('tagihan')->where('id_pelanggan', $targetPelanggan->id_pelanggan)->whereIn('status', ['unpaid', 'belum_bayar'])->exists();
-                        if ($targetPelanggan->is_active == 0 || $hasUnpaid) {
-                            $reply .= "Status: 🔴 *TERISOLIR (BELUM BAYAR)*\n";
-                        } else {
-                            if ($isSuccess) {
-                                $reply .= "Status: ✅ *ONLINE*\n";
-                                $reply .= "Latency: {$avgTime}ms\n";
-                                $reply .= "Packets: {$received}/4 Received\n";
-                            } else {
-                                $reply .= "Status: ❌ *OFFLINE (Request Timeout)*\n";
-                            }
-                        }
-                        Cache::put('last_check_' . $remoteJid, $targetPelanggan->id_pelanggan, 3600);
+                $reply = "📍 *Hasil Ping (Mikrotik)*\n--------------------------\n";
+                if ($pelangganInfo) $reply .= $pelangganInfo;
+                $reply .= "Target: $targetStr ($host)\n";
+                
+                if ($targetPelanggan) {
+                    $hasUnpaid = DB::table('tagihan')->where('id_pelanggan', $targetPelanggan->id_pelanggan)->whereIn('status', ['unpaid', 'belum_bayar'])->exists();
+                    if ($targetPelanggan->is_active == 0 || $hasUnpaid) {
+                        $reply .= "Status: 🔴 *TERISOLIR (BELUM BAYAR)*\n";
                     } else {
                         if ($isSuccess) {
-                            $reply .= "Status: ✅ *REACHABLE*\n";
+                            $reply .= "Status: ✅ *ONLINE*\n";
                             $reply .= "Latency: {$avgTime}ms\n";
+                            $reply .= "Packets: {$received}/4 Received\n";
                         } else {
-                            $reply .= "Status: ❌ *UNREACHABLE*\n";
+                            $reply .= "Status: ❌ *OFFLINE (Request Timeout)*\n";
                         }
                     }
-
-                    $this->saveBotReply($remoteJid, $reply);
-                    return response()->json(['reply' => $reply]);
+                    Cache::put('last_check_' . $remoteJid, $targetPelanggan->id_pelanggan, 3600);
+                } else {
+                    if ($isSuccess) {
+                        $reply .= "Status: ✅ *REACHABLE*\n";
+                        $reply .= "Latency: {$avgTime}ms\n";
+                    } else {
+                        $reply .= "Status: ❌ *UNREACHABLE*\n";
+                    }
                 }
+
+                $this->saveBotReply($remoteJid, $reply);
+                return response()->json(['reply' => $reply]);
             }
         } catch (\Exception $e) {
             Log::error("Ping Error: " . $e->getMessage());
+        }
+
+        // --- DATABASE FALLBACK JIKA KONEKSI ROUTER GAGAL ATAU PING TIDAK MERESPON ---
+        if ($targetPelanggan) {
+            $hasUnpaid = DB::table('tagihan')->where('id_pelanggan', $targetPelanggan->id_pelanggan)->whereIn('status', ['unpaid', 'belum_bayar'])->exists();
+            
+            $reply = "📍 *Hasil Ping (Mikrotik - Fallback)*\n--------------------------\n";
+            if ($pelangganInfo) $reply .= $pelangganInfo;
+            $reply .= "Target: $targetStr ($host)\n";
+            
+            if ($targetPelanggan->is_active == 0 || $hasUnpaid) {
+                $reply .= "Status: 🔴 *TERISOLIR (BELUM BAYAR)*\n";
+                $reply .= "\n⚠️ _Catatan: Koneksi ke Router MikroTik sedang offline atau terganggu, namun status penagihan Anda saat ini terdeteksi belum bayar (Isolir)._";
+            } else {
+                $reply .= "Status: 🟡 *DATABASE ACTIVE (ROUTER OFFLINE)*\n";
+                $reply .= "\n⚠️ _Catatan: Koneksi ke Router MikroTik sedang offline atau terganggu, sehingga kami tidak dapat mengukur ping/koneksi modem Anda saat ini. Namun, status administrasi Anda aktif._";
+            }
+            
+            $this->saveBotReply($remoteJid, $reply);
+            return response()->json(['reply' => $reply]);
         }
 
         return response()->json(['reply' => "⚠️ Maaf Kak, target \"$targetStr\" ($host) tidak merespon.\n\nHal ini bisa disebabkan karena:\n1. Perangkat pelanggan mati/cabut power.\n2. Kabel dropcore putus.\n3. Router sedang sibuk.\n\nSilakan coba lagi beberapa saat lagi."]);
@@ -317,8 +439,13 @@ class WhatsappController extends Controller
 
             if ($exactPelanggan) {
                 $p = $exactPelanggan;
-                $mapsUrl = "https://www.google.com/maps?q={$p->latitude},{$p->longitude}";
-                $reply = "📍 *Lokasi Pelanggan (GIS)*\n\nNama: *{$p->nama_pelanggan}*\nKode: *{$p->kode_pelanggan}*\nAlamat: {$p->alamat}\n\n🗺️ *Google Maps:*\n$mapsUrl";
+                if ($mode === 'url' && !empty($p->maps_url)) {
+                    $mapsUrl = $p->maps_url;
+                    $reply = "📍 *Link Google Maps Pelanggan*\n\nNama: *{$p->nama_pelanggan}*\nKode: *{$p->kode_pelanggan}*\nAlamat: {$p->alamat}\n\n🗺️ *Link Google Maps:*\n$mapsUrl";
+                } else {
+                    $mapsUrl = "https://www.google.com/maps?q={$p->latitude},{$p->longitude}";
+                    $reply = "📍 *Lokasi Pelanggan (GIS)*\n\nNama: *{$p->nama_pelanggan}*\nKode: *{$p->kode_pelanggan}*\nAlamat: {$p->alamat}\n\n🗺️ *Google Maps (Koordinat):*\n$mapsUrl";
+                }
                 $this->saveBotReply($remoteJid, $reply);
                 return response()->json(['reply' => $reply]);
             }
@@ -366,8 +493,13 @@ class WhatsappController extends Controller
         if ($resPelanggan->count() + $resOdc->count() === 1) {
             if ($resPelanggan->isNotEmpty()) {
                 $p = $resPelanggan->first();
-                $mapsUrl = "https://www.google.com/maps?q={$p->latitude},{$p->longitude}";
-                $reply = "📍 *Lokasi Pelanggan*\n\nNama: *{$p->nama_pelanggan}*\nKode: *{$p->kode_pelanggan}*\n\n🗺️ *Google Maps:*\n$mapsUrl";
+                if ($mode === 'url' && !empty($p->maps_url)) {
+                    $mapsUrl = $p->maps_url;
+                    $reply = "📍 *Link Google Maps Pelanggan*\n\nNama: *{$p->nama_pelanggan}*\nKode: *{$p->kode_pelanggan}*\n\n🗺️ *Link Google Maps:*\n$mapsUrl";
+                } else {
+                    $mapsUrl = "https://www.google.com/maps?q={$p->latitude},{$p->longitude}";
+                    $reply = "📍 *Lokasi Pelanggan*\n\nNama: *{$p->nama_pelanggan}*\nKode: *{$p->kode_pelanggan}*\n\n🗺️ *Google Maps (Koordinat):*\n$mapsUrl";
+                }
                 $this->saveBotReply($remoteJid, $reply);
                 return response()->json(['reply' => $reply]);
             } else {
@@ -482,25 +614,45 @@ class WhatsappController extends Controller
     private function handleCekTagihanPlaceholder($finalReply, $message, $remoteJid)
     {
         $customerCode = trim(str_ireplace('cek tagihan', '', $message));
+        $customer = null;
+
         if ($customerCode) {
-            $customer = \App\Models\Pelanggan::where('kode_pelanggan', $customerCode)->first();
-            if ($customer) {
-                Cache::put('last_check_' . $remoteJid, $customer->id_pelanggan, 3600);
-                $bills = $customer->tagihan()->where('status', '!=', 'paid')->get();
-                if ($bills->count() > 0) {
-                    $info = "Halo " . $customer->nama_pelanggan . ",\n\n*Tagihan Anda:*\n";
-                    $total = 0;
-                    foreach ($bills as $bill) {
-                        $info .= "• " . $bill->bulan . " " . $bill->tahun . ": Rp " . number_format($bill->jumlah, 0, ',', '.') . "\n";
-                        $total += $bill->jumlah;
-                    }
-                    $info .= "\n*Total: Rp " . number_format($total, 0, ',', '.') . "*\n\nKirim bukti bayar kesini ya!";
-                    return str_replace('{cek_tagihan}', $info, $finalReply);
-                }
-                return str_replace('{cek_tagihan}', "Lunas! Anda tidak memiliki tagihan aktif.", $finalReply);
+            $customer = \App\Models\Pelanggan::where('kode_pelanggan', $customerCode)
+                ->orWhere('mikrotik_username', $customerCode)
+                ->first();
+        } else {
+            // Bersihkan nomor WA pengirim untuk pencarian otomatis
+            $phoneStr = explode('@', $remoteJid)[0];
+            $cleanNum = preg_replace('/[^0-9]/', '', $phoneStr);
+            
+            if (!empty($cleanNum)) {
+                // Cari pelanggan dengan nomor WA yang cocok (baik dengan 62, 0, atau potongan kode negara)
+                $customer = \App\Models\Pelanggan::where('no_wa', 'like', '%' . $cleanNum . '%')
+                    ->orWhere('no_wa', 'like', '%' . substr($cleanNum, 2) . '%')
+                    ->first();
             }
+        }
+
+        if ($customer) {
+            Cache::put('last_check_' . $remoteJid, $customer->id_pelanggan, 3600);
+            $bills = $customer->tagihan()->where('status', '!=', 'paid')->get();
+            if ($bills->count() > 0) {
+                $info = "Halo " . $customer->nama_pelanggan . ",\n\n*Tagihan Anda:*\n";
+                $total = 0;
+                foreach ($bills as $bill) {
+                    $info .= "• " . $bill->bulan . " " . $bill->tahun . ": Rp " . number_format($bill->jumlah, 0, ',', '.') . "\n";
+                    $total += $bill->jumlah;
+                }
+                $info .= "\n*Total: Rp " . number_format($total, 0, ',', '.') . "*\n\nKirim bukti bayar kesini ya!";
+                return str_replace('{cek_tagihan}', $info, $finalReply);
+            }
+            return str_replace('{cek_tagihan}', "Lunas! Anda tidak memiliki tagihan aktif.", $finalReply);
+        }
+
+        if ($customerCode) {
             return str_replace('{cek_tagihan}', "Kode *$customerCode* tidak ditemukan.", $finalReply);
         }
+
         return str_replace('{cek_tagihan}', "Ketik *cek tagihan [KODE]*\nContoh: *cek tagihan AD20*", $finalReply);
     }
 

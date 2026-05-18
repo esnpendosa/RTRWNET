@@ -174,7 +174,7 @@ class TagihanController extends Controller
     {
         $request->validate([
             'metode_pembayaran' => 'required|string',
-            'bukti_bayar' => 'required|image|max:2048',
+            'bukti_bayar' => 'required',
         ]);
 
         $data = [
@@ -183,7 +183,25 @@ class TagihanController extends Controller
         ];
 
         if ($request->hasFile('bukti_bayar')) {
-            $path = $request->file('bukti_bayar')->store('bukti_bayar', 'public');
+            $file = $request->file('bukti_bayar');
+            $extension = strtolower($file->getClientOriginalExtension());
+            $allowedExtensions = ['jpeg', 'png', 'jpg', 'gif', 'pdf'];
+            if (!in_array($extension, $allowedExtensions)) {
+                return back()->withErrors(['bukti_bayar' => 'Bukti pembayaran harus berupa dokumen gambar (jpg, png, jpeg) atau berkas PDF!']);
+            }
+            if ($file->getSize() > 3 * 1024 * 1024) {
+                return back()->withErrors(['bukti_bayar' => 'Ukuran file bukti pembayaran maksimal 3MB!']);
+            }
+            // Move file manually to public storage to bypass Laravel's extension guesser (which requires php_fileinfo extension)
+            $filename = time() . '_' . uniqid() . '.' . $extension;
+            $targetDir = storage_path('app/public/bukti_bayar');
+            if (!file_exists($targetDir)) {
+                @mkdir($targetDir, 0755, true);
+                @chmod($targetDir, 0755);
+            }
+            $file->move($targetDir, $filename);
+            @chmod($targetDir . '/' . $filename, 0644);
+            $path = 'bukti_bayar/' . $filename;
             $data['bukti_bayar'] = $path;
         }
 
@@ -277,6 +295,54 @@ class TagihanController extends Controller
         
         return $pdf->download($fileName);
     }
+    public function payCash(Tagihan $tagihan)
+    {
+        if (auth()->user()->id_role != 1) abort(403);
+
+        $tagihan->update([
+            'status' => 'paid',
+            'metode_pembayaran' => 'Cash',
+            'paid_at' => now(),
+        ]);
+
+        $pelanggan = $tagihan->pelanggan;
+        if ($pelanggan && $pelanggan->id_router) {
+            $mikrotikService = app(\App\Services\MikrotikService::class);
+            $mikrotikService->setSecretStatus($pelanggan->router, $pelanggan->mikrotik_username ?: $pelanggan->kode_pelanggan, $pelanggan->mikrotik_type, false, $pelanggan->ip_address);
+            $pelanggan->update(['is_active' => true]);
+        }
+
+        // Kirim Notifikasi WA Kwitansi Lunas
+        if ($pelanggan && $pelanggan->no_wa) {
+            try {
+                $waClient = new \App\Services\WhatsappClient();
+                $waClient->sendReceipt($tagihan, true);
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::error('Gagal kirim notifikasi WA Cash: ' . $e->getMessage());
+            }
+        }
+
+        return back()->with('success', 'Pembayaran Cash berhasil dikonfirmasi, WiFi diaktifkan, dan struk terkirim otomatis ke WhatsApp pelanggan!');
+    }
+
+    public function sendReceiptWa(Tagihan $tagihan)
+    {
+        if (auth()->user()->id_role != 1) abort(403);
+        
+        $pelanggan = $tagihan->pelanggan;
+        if (!$pelanggan || !$pelanggan->no_wa) {
+            return back()->with('error', 'Pelanggan tidak memiliki nomor WhatsApp yang valid.');
+        }
+
+        try {
+            $waClient = new \App\Services\WhatsappClient();
+            $waClient->sendReceipt($tagihan, true);
+            return back()->with('success', 'Kwitansi pembayaran berhasil dikirim ke WhatsApp pelanggan!');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Gagal mengirim kwitansi WhatsApp: ' . $e->getMessage());
+        }
+    }
+
     public function runIsolirSync(Request $request)
     {
         if (auth()->user()->id_role != 1) abort(403);
@@ -285,11 +351,11 @@ class TagihanController extends Controller
         
         try {
             if ($type == 'disable' || $type == 'all') {
-                \Illuminate\Support\Facades\Artisan::call('billing:disable-unpaid');
+                \Illuminate\Support\Facades\Artisan::call('billing:disable-unpaid', ['--force' => true]);
             }
             
             if ($type == 'enable' || $type == 'all') {
-                \Illuminate\Support\Facades\Artisan::call('billing:enable-paid');
+                \Illuminate\Support\Facades\Artisan::call('billing:enable-paid', ['--force' => true]);
             }
             
             $output = \Illuminate\Support\Facades\Artisan::output();

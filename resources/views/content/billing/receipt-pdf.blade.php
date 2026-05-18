@@ -74,7 +74,7 @@
             <table style="width: 100%;">
                 <tr>
                     <td style="width: 50%;">
-                        <img src="https://blogger.googleusercontent.com/img/a/AVvXsEhTp3lveqnLYbNRRyeGc_F24FMRpwEuzi9WgEZesnrR0kyUYhfiMwr1ifbLNqIesohcACtM7h713FsLKmE6k38n_-enxgK5pvkL0C9iLA4fbg8YVGXjyWZraY-26Xrf8X6-J0LrURVByT--R0-zq8XASTMh5u8svjvPRTy4dHoVYX-tRiDKnaATKI0PuJE" style="height: 60px; margin-bottom: 5px;">
+                        <div style="font-size: 26px; font-weight: bold; color: #1e3a8a; font-family: 'Helvetica', 'Arial', sans-serif; letter-spacing: 2px; margin-bottom: 5px;">RMI</div>
                         <div style="font-size: 14px; font-weight: bold; color: #333;">Rozitech Multimedia Indonesia</div>
                     </td>
                     <td style="text-align: right; font-size: 11px;">

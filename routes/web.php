@@ -15,6 +15,27 @@ use App\Http\Controllers\ScanController;
 use App\Http\Controllers\OdcOdpController;
 use App\Http\Controllers\authentications\LoginBasic;
 
+// Fallback route to serve storage files directly without depending on symlink permissions
+Route::get('storage/{folder}/{filename}', function ($folder, $filename) {
+    $path = storage_path("app/public/{$folder}/{$filename}");
+    if (!file_exists($path)) {
+        abort(404);
+    }
+    $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+    $mimes = [
+        'jpg' => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'png' => 'image/png',
+        'gif' => 'image/gif',
+        'pdf' => 'application/pdf',
+    ];
+    $contentType = $mimes[$extension] ?? 'application/octet-stream';
+    return response()->file($path, [
+        'Content-Type' => $contentType,
+        'Cache-Control' => 'public, max-age=86400',
+    ]);
+});
+
 // Auth Routes (Using template's basic login for now)
 Route::get('/login', [LoginBasic::class, 'index'])->name('login');
 Route::get('/auth/login-basic', [LoginBasic::class, 'index']);
@@ -109,6 +130,8 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('billing/delete-all', [\App\Http\Controllers\TagihanController::class, 'deleteAll'])->name('billing.delete-all');
     Route::delete('billing/{tagihan}', [\App\Http\Controllers\TagihanController::class, 'destroy'])->name('billing.destroy');
     Route::get('billing/{tagihan}/receipt', [\App\Http\Controllers\TagihanController::class, 'downloadReceipt'])->name('billing.receipt.pdf');
+    Route::post('billing/{tagihan}/cash', [\App\Http\Controllers\TagihanController::class, 'payCash'])->name('billing.pay-cash');
+    Route::post('billing/{tagihan}/send-receipt-wa', [\App\Http\Controllers\TagihanController::class, 'sendReceiptWa'])->name('billing.send-receipt-wa');
     
     // Settings
     Route::get('settings/payment', [\App\Http\Controllers\TagihanController::class, 'settings'])->name('settings.payment');
@@ -136,6 +159,12 @@ Route::middleware(['auth'])->group(function () {
         Route::post('whatsapp/session/pairing', [\App\Http\Controllers\WhatsappManagementController::class, 'pairing'])->name('whatsapp.session.pairing');
         Route::post('whatsapp/session/stop', [\App\Http\Controllers\WhatsappManagementController::class, 'stop'])->name('whatsapp.session.stop');
         Route::post('whatsapp/bot/start', [\App\Http\Controllers\WhatsappManagementController::class, 'startBotProcess'])->name('whatsapp.bot.start');
+        
+        // WA Status Scheduler
+        Route::get('whatsapp/status-schedule', [\App\Http\Controllers\WaStatusScheduleController::class, 'index'])->name('whatsapp.status.index');
+        Route::post('whatsapp/status-schedule', [\App\Http\Controllers\WaStatusScheduleController::class, 'store'])->name('whatsapp.status.store');
+        Route::post('whatsapp/status-schedule/{schedule}/publish', [\App\Http\Controllers\WaStatusScheduleController::class, 'publishImmediately'])->name('whatsapp.status.publish-now');
+        Route::delete('whatsapp/status-schedule/{schedule}', [\App\Http\Controllers\WaStatusScheduleController::class, 'destroy'])->name('whatsapp.status.destroy');
     });
 
     // Chatbot Management
@@ -161,3 +190,266 @@ Route::post('payment/callback', [\App\Http\Controllers\PaymentController::class,
 
 // Quick Scan Pay
 Route::get('pay/{kode_pelanggan}', [\App\Http\Controllers\PaymentController::class, 'payById'])->name('payment.by-id');
+
+// Temporary route to get WA Groups from local bot on aaPanel
+Route::get('get-wa-groups', function() {
+    $port = 3000;
+    $secret = 'rozitech-bot-secret-2024';
+    
+    // Parse .env directly in case config is cached
+    if (file_exists(base_path('.env'))) {
+        $envContent = file_get_contents(base_path('.env'));
+        if (preg_match('/^BOT_PORT\s*=\s*(.+)$/m', $envContent, $matches)) {
+            $port = trim($matches[1], "\"' \r\n");
+        }
+        if (preg_match('/^BOT_SECRET\s*=\s*(.+)$/m', $envContent, $matches)) {
+            $secret = trim($matches[1], "\"' \r\n");
+        }
+    }
+
+    $url = "http://127.0.0.1:$port/groups";
+    
+    try {
+        $response = \Illuminate\Support\Facades\Http::timeout(15)
+            ->withHeaders(['X-Bot-Secret' => $secret])
+            ->get($url);
+        
+        if (!$response->successful()) {
+            return response()->json([
+                'status' => 'failed_response',
+                'target_url' => $url,
+                'http_status' => $response->status(),
+                'body' => $response->body()
+            ]);
+        }
+        
+        $groups = $response->json();
+        
+        if (request()->has('json')) {
+            return response()->json($groups);
+        }
+        
+        // RENDER PREMIUM HTML
+        $groupCards = '';
+        if (empty($groups)) {
+            $groupCards = '<div class="empty-state">Tidak ada grup WhatsApp yang ditemukan untuk sesi ini.</div>';
+        } else {
+            foreach ($groups as $g) {
+                $escapedId = e($g['id']);
+                $escapedSubject = e($g['subject']);
+                $groupCards .= "
+                <div class=\"group-card\">
+                    <div class=\"group-info\">
+                        <div class=\"group-name\">{$escapedSubject}</div>
+                        <div class=\"group-id\">{$escapedId}</div>
+                    </div>
+                    <button class=\"btn-copy\" onclick=\"copyToClipboard('{$escapedId}')\">
+                        Salin ID
+                    </button>
+                </div>";
+            }
+        }
+        
+        return "
+<!DOCTYPE html>
+<html lang=\"id\">
+<head>
+    <meta charset=\"UTF-8\">
+    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
+    <title>Daftar Grup WhatsApp - Rozitech</title>
+    <link href=\"https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap\" rel=\"stylesheet\">
+    <style>
+        :root {
+            --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --accent: #10b981;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border: rgba(255, 255, 255, 0.08);
+        }
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg-gradient);
+            color: var(--text-main);
+            min-height: 100vh;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem 1rem;
+            box-sizing: border-box;
+        }
+        .container {
+            width: 100%;
+            max-width: 800px;
+            background: var(--card-bg);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 2.5rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            animation: fadeIn 0.6s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 2.5rem;
+        }
+        .logo-area {
+            width: 64px;
+            height: 64px;
+            background: linear-gradient(135deg, var(--primary) 0%, #8b5cf6 100%);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1rem auto;
+            box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3);
+        }
+        .logo-area svg {
+            width: 32px;
+            height: 32px;
+            fill: white;
+        }
+        h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 0 0 0.5rem 0;
+            background: linear-gradient(to right, #f8fafc, #cbd5e1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+        .group-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        .group-card {
+            background: rgba(15, 23, 42, 0.4);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 1.25rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .group-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(99, 102, 241, 0.4);
+            background: rgba(15, 23, 42, 0.6);
+            box-shadow: 0 10px 20px -10px rgba(0, 0, 0, 0.3);
+        }
+        .group-info {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+        .group-name {
+            font-weight: 600;
+            font-size: 1.1rem;
+            color: #ffffff;
+        }
+        .group-id {
+            font-family: monospace;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            background: rgba(255, 255, 255, 0.05);
+            padding: 0.2rem 0.5rem;
+            border-radius: 6px;
+            width: fit-content;
+        }
+        .btn-copy {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
+            border: none;
+            color: white;
+            padding: 0.6rem 1.2rem;
+            border-radius: 12px;
+            font-weight: 500;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+        }
+        .btn-copy:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 16px rgba(99, 102, 241, 0.3);
+        }
+        .btn-copy:active {
+            transform: scale(0.95);
+        }
+        .empty-state {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: var(--text-muted);
+        }
+        .toast {
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: var(--accent);
+            color: white;
+            padding: 0.75rem 2rem;
+            border-radius: 99px;
+            font-weight: 500;
+            box-shadow: 0 10px 25px -5px rgba(16, 185, 129, 0.4);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 100;
+        }
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+        }
+    </style>
+</head>
+<body>
+    <div class=\"container\">
+        <div class=\"header\">
+            <div class=\"logo-area\">
+                <svg viewBox=\"0 0 24 24\"><path d=\"M12 2C6.48 2 2 6.48 2 12c0 2.17.76 4.16 2.03 5.74L3 21l3.35-1.03C7.91 20.65 9.89 21 12 21c5.52 0 10-4.48 10-10S17.52 2 12 2zm1 14h-2v-2h2v2zm0-4h-2V7h2v5z\"/></svg>
+            </div>
+            <h1>Daftar Grup WhatsApp</h1>
+            <div class=\"subtitle\">Salin ID Grup di bawah untuk ditempel pada file .env di aaPanel</div>
+        </div>
+        
+        <div class=\"group-list\">
+            {$groupCards}
+        </div>
+    </div>
+    
+    <div class=\"toast\" id=\"toast\">ID Grup berhasil disalin!</div>
+    
+    <script>
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                const toast = document.getElementById('toast');
+                toast.classList.add('show');
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                }, 2000);
+            });
+        }
+    </script>
+</body>
+</html>
+";
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => 'connection_error',
+            'target_url' => $url,
+            'message' => $e->getMessage()
+        ]);
+    }
+});

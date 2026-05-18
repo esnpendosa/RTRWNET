@@ -129,6 +129,13 @@
       "permission": "user_manage"
     },
     {
+      "url": "/whatsapp/status-schedule",
+      "name": "Penjadwal Status WA",
+      "icon": "menu-icon icon-base bx bx-time-five",
+      "slug": "whatsapp-status",
+      "permission": "user_manage"
+    },
+    {
       "url": "/system/logs",
       "name": "Cek Logs Realtime",
       "icon": "menu-icon icon-base bx bx-terminal",
