@@ -408,7 +408,24 @@ class MikrotikService
                     $found = true;
                 }
             } elseif ($type === 'static') {
-                // Reliance purely on Firewall Address-List and Filter rules for complete ON/OFF isolation (no queue throttling required)
+                // 1. Update Simple Queue (Limit Speed)
+                $targetQueue = $this->findSimpleQueue($client, $username, $ip, $router);
+                
+                if ($targetQueue) {
+                    $id = $targetQueue['.id'];
+                    if ($disable) {
+                        // Cukup di-disable saja antreannya saat isolir (tanpa mengubah speed limit)
+                        $client->query((new Query('/queue/simple/set'))
+                            ->equal('.id', $id)
+                            ->equal('disabled', 'yes'))->read();
+                    } else {
+                        // Aktifkan kembali antrean saat pelanggan aktif
+                        $client->query((new Query('/queue/simple/set'))
+                            ->equal('.id', $id)
+                            ->equal('disabled', 'no'))->read();
+                    }
+                    $found = true;
+                }
 
                 // 2. Update Address List (Block Traffic via Firewall)
                 if ($ip) {
