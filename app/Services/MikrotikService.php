@@ -408,41 +408,7 @@ class MikrotikService
                     $found = true;
                 }
             } elseif ($type === 'static') {
-                // 1. Update Simple Queue (Limit Speed)
-                $targetQueue = $this->findSimpleQueue($client, $username, $ip, $router);
-                
-                if ($targetQueue) {
-                    $id = $targetQueue['.id'];
-                    if ($disable) {
-                        // Jangan di-disable antriannya (karena malah jadi loss), tapi limit ke 1kbps
-                        $client->query((new Query('/queue/simple/set'))
-                            ->equal('.id', $id)
-                            ->equal('max-limit', '1k/1k')
-                            ->equal('comment', 'ISOLIR OTOMATIS')
-                            ->equal('disabled', 'no'))->read();
-                    } else {
-                        // Kembalikan ke limit normal berdasarkan paket pelanggan agar kecepatan pulih
-                        $pelanggan = \App\Models\Pelanggan::where('kode_pelanggan', $username)
-                            ->orWhere('mikrotik_username', $username)
-                            ->first();
-                        
-                        $limit = '20M/20M'; // default jika tidak ditemukan
-                        if ($pelanggan && !empty($pelanggan->paket)) {
-                            // Deteksi paket (contoh: "10 Mbps" -> "10M/10M", "20M" -> "20M/20M")
-                            $num = preg_replace('/[^0-9]/', '', $pelanggan->paket);
-                            if ($num) {
-                                $limit = $num . 'M/' . $num . 'M';
-                            }
-                        }
-
-                        $client->query((new Query('/queue/simple/set'))
-                            ->equal('.id', $id)
-                            ->equal('max-limit', $limit)
-                            ->equal('comment', 'AKTIF')
-                            ->equal('disabled', 'no'))->read();
-                    }
-                    $found = true;
-                }
+                // Reliance purely on Firewall Address-List and Filter rules for complete ON/OFF isolation (no queue throttling required)
 
                 // 2. Update Address List (Block Traffic via Firewall)
                 if ($ip) {
