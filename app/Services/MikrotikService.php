@@ -421,13 +421,25 @@ class MikrotikService
                             ->equal('comment', 'ISOLIR OTOMATIS')
                             ->equal('disabled', 'no'))->read();
                     } else {
-                        // Kembalikan ke limit normal (misal 10M/10M atau biarkan admin set ulang)
-                        // Sebagai fallback, kita set ke 100M agar tidak lemot setelah bayar, 
-                        // atau idealnya kita tidak ubah limitnya tapi pastikan 'disabled=no'
+                        // Kembalikan ke limit normal berdasarkan paket pelanggan agar kecepatan pulih
+                        $pelanggan = \App\Models\Pelanggan::where('kode_pelanggan', $username)
+                            ->orWhere('mikrotik_username', $username)
+                            ->first();
+                        
+                        $limit = '20M/20M'; // default jika tidak ditemukan
+                        if ($pelanggan && !empty($pelanggan->paket)) {
+                            // Deteksi paket (contoh: "10 Mbps" -> "10M/10M", "20M" -> "20M/20M")
+                            $num = preg_replace('/[^0-9]/', '', $pelanggan->paket);
+                            if ($num) {
+                                $limit = $num . 'M/' . $num . 'M';
+                            }
+                        }
+
                         $client->query((new Query('/queue/simple/set'))
                             ->equal('.id', $id)
+                            ->equal('max-limit', $limit)
+                            ->equal('comment', 'AKTIF')
                             ->equal('disabled', 'no'))->read();
-                        // Catatan: Speed asli akan kembali jika router di-sync ulang or admin mengubahnya
                     }
                     $found = true;
                 }
