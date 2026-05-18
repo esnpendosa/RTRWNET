@@ -38,6 +38,9 @@ const BOT_SECRET   = process.env.BOT_SECRET || 'rozitech-bot-secret-2024';
 const LARAVEL_URL  = process.env.APP_URL    || 'http://127.0.0.1:8000';
 const SESSIONS_PATH = path.resolve(__dirname, 'sessions');
 
+// ─── Session Resmi (hanya session ini yang boleh terima & kirim pesan pelanggan) ─
+const MAIN_SESSION_ID = process.env.MAIN_SESSION_ID || 'main';
+
 if (!fs.existsSync(SESSIONS_PATH)) fs.mkdirSync(SESSIONS_PATH, { recursive: true });
 
 const sessions      = new Map(); // id -> sock
@@ -184,6 +187,12 @@ async function startSession(id, opts = {}) {
     // ── Incoming Messages → Forward to Laravel ──
     sock.ev.on('messages.upsert', async ({ messages: msgs, type }) => {
         if (type !== 'notify') return;
+
+        // 🔒 SECURITY: Hanya proses pesan dari session resmi
+        if (cleanId !== MAIN_SESSION_ID) {
+            console.log(`[SECURITY] Pesan diabaikan dari sesi tidak resmi: ${cleanId} (sesi resmi: ${MAIN_SESSION_ID})`);
+            return;
+        }
 
         for (const msg of msgs) {
             const msgId = msg.key.id;
@@ -420,9 +429,12 @@ app.post('/send-message', requireSecret, async (req, res) => {
 
     if (!phone) return res.status(400).json({ error: 'phone wajib diisi' });
 
-    // Pilih sesi
-    let targetId = sessionId || Array.from(sessions.keys())[0];
-    if (!targetId) return res.status(404).json({ error: 'Tidak ada sesi aktif' });
+    // 🔒 SECURITY: Selalu kirim via session resmi, abaikan sessionId dari luar
+    let targetId = MAIN_SESSION_ID;
+    if (!sessions.has(targetId)) {
+        // Fallback jika session resmi belum aktif
+        return res.status(503).json({ error: `Sesi resmi '${MAIN_SESSION_ID}' belum aktif. Hubungkan WA terlebih dahulu.` });
+    }
 
     const sock  = sessions.get(targetId);
     const state = sessionStates.get(targetId);
