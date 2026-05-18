@@ -60,22 +60,17 @@ try {
     // --- 2. BERSIHKAN FIREWALL FILTER RULES ---
     echo "2. Memeriksa & Membersihkan Firewall Filter Rules...\n";
     $filterQuery = new Query('/ip/firewall/filter/print');
+    $filterQuery->equal('comment', $username);
     $filterResp = $client->query($filterQuery)->read();
     $removedFilterCount = 0;
 
     if (!empty($filterResp)) {
         foreach ($filterResp as $filter) {
-            $comment = $filter['comment'] ?? '';
-            $srcAddr = $filter['src-address'] ?? '';
-            $dstAddr = $filter['dst-address'] ?? '';
             $filterId = $filter['.id'] ?? '';
-
-            if (str_contains($comment, $username) || ($ip && (str_contains($srcAddr, $ip) || str_contains($dstAddr, $ip)))) {
-                echo "   -> Menghapus Filter Rule: ID={$filterId}, Comment='{$comment}'...\n";
-                $remFilter = (new Query('/ip/firewall/filter/remove'))->equal('.id', $filterId);
-                $client->query($remFilter)->read();
-                $removedFilterCount++;
-            }
+            echo "   -> Menghapus Filter Rule: ID={$filterId}, Comment='{$username}'...\n";
+            $remFilter = (new Query('/ip/firewall/filter/remove'))->equal('.id', $filterId);
+            $client->query($remFilter)->read();
+            $removedFilterCount++;
         }
     }
     echo "   ✅ Selesai! Total $removedFilterCount Firewall Filter Rules dihapus.\n\n";
@@ -101,26 +96,6 @@ try {
     
     $client->query($addQueue)->read();
     echo "   ✅ Sukses Membuat Simple Queue Baru: Name={$username}, Target={$ip}/32, Speed={$limit}!\n\n";
-
-    // --- 4. RESET CONNECTION TRACKING (CONNTRACK) ---
-    echo "4. Membersihkan Active Connections (Conntrack) di Firewall...\n";
-    // Menghapus koneksi aktif agar firewall block benar-benar ter-clear seketika
-    $connQuery = new Query('/ip/firewall/connection/print');
-    $connResp = $client->query($connQuery)->read();
-    $connCleared = 0;
-    if (!empty($connResp)) {
-        foreach ($connResp as $conn) {
-            $src = $conn['src-address'] ?? '';
-            $dst = $conn['dst-address'] ?? '';
-            $connId = $conn['.id'] ?? '';
-            if (str_contains($src, $ip) || str_contains($dst, $ip)) {
-                $remConn = (new Query('/ip/firewall/connection/remove'))->equal('.id', $connId);
-                $client->query($remConn)->read();
-                $connCleared++;
-            }
-        }
-    }
-    echo "   ✅ Selesai! Total $connCleared koneksi aktif di-reset.\n\n";
 
     // --- 5. PING TEST ---
     echo "5. Menguji Koneksi Fisik (Ping dari MikroTik ke $ip)...\n";
