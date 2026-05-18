@@ -377,15 +377,13 @@ class MikrotikService
                     $id = $resp[0]['.id'];
                     $client->query((new Query('/ppp/secret/set'))->equal('.id', $id)->equal('disabled', $disable ? 'yes' : 'no'))->read();
                     
-                    // Jika isolir, putuskan koneksi aktif agar segera terputus
-                    if ($disable) {
-                        $activeQuery = new Query('/ppp/active/print');
-                        $activeQuery->where('name', $username);
-                        $activeResp = $client->query($activeQuery)->read();
-                        if (!empty($activeResp)) {
-                            foreach ($activeResp as $active) {
-                                $client->query((new Query('/ppp/active/remove'))->equal('.id', $active['.id']))->read();
-                            }
+                    // Putuskan koneksi aktif agar modem/router langsung melakukan dial-in ulang secara fresh
+                    $activeQuery = new Query('/ppp/active/print');
+                    $activeQuery->where('name', $username);
+                    $activeResp = $client->query($activeQuery)->read();
+                    if (!empty($activeResp)) {
+                        foreach ($activeResp as $active) {
+                            $client->query((new Query('/ppp/active/remove'))->equal('.id', $active['.id']))->read();
                         }
                     }
                     $found = true;
@@ -398,15 +396,13 @@ class MikrotikService
                     $id = $resp[0]['.id'];
                     $client->query((new Query('/ip/hotspot/user/set'))->equal('.id', $id)->equal('disabled', $disable ? 'yes' : 'no'))->read();
                     
-                    // Jika isolir, putuskan sesi aktif
-                    if ($disable) {
-                        $activeQuery = new Query('/ip/hotspot/active/print');
-                        $activeQuery->where('user', $username);
-                        $activeResp = $client->query($activeQuery)->read();
-                        if (!empty($activeResp)) {
-                            foreach ($activeResp as $active) {
-                                $client->query((new Query('/ip/hotspot/active/remove'))->equal('.id', $active['.id']))->read();
-                            }
+                    // Putuskan sesi aktif agar pengguna dipaksa login ulang secara fresh
+                    $activeQuery = new Query('/ip/hotspot/active/print');
+                    $activeQuery->where('user', $username);
+                    $activeResp = $client->query($activeQuery)->read();
+                    if (!empty($activeResp)) {
+                        foreach ($activeResp as $active) {
+                            $client->query((new Query('/ip/hotspot/active/remove'))->equal('.id', $active['.id']))->read();
                         }
                     }
                     $found = true;
