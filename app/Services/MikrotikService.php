@@ -138,25 +138,68 @@ class MikrotikService
     public function findSimpleQueue($client, $username, $ipAddress = null, Router $router = null)
     {
         try {
+            $searchKey = trim($username);
+
+            // 1. Coba cari langsung berdasarkan Name (Paling Cepat & Akurat!)
             $query = new Query('/queue/simple/print');
             $query->equal('.proplist', '.id,name,target,comment,max-limit');
+            $query->equal('name', $searchKey);
             $queues = $client->query($query)->read();
+            if (!empty($queues)) {
+                return $queues[0];
+            }
 
-            if (empty($queues)) return null;
+            // 2. Coba cari langsung berdasarkan Comment
+            $query = new Query('/queue/simple/print');
+            $query->equal('.proplist', '.id,name,target,comment,max-limit');
+            $query->equal('comment', $searchKey);
+            $queues = $client->query($query)->read();
+            if (!empty($queues)) {
+                return $queues[0];
+            }
 
-            $searchKey = strtolower(trim($username));
-            $customerIp = $ipAddress ? trim($ipAddress) : null;
-
-            foreach ($queues as $q) {
-                $qName = strtolower($q['name'] ?? '');
-                $qComment = strtolower($q['comment'] ?? '');
-                $qTarget = $q['target'] ?? '';
+            // 3. Coba cari langsung berdasarkan Target IP
+            if ($ipAddress) {
+                $cleanIp = trim($ipAddress);
                 
-                if ($qName === $searchKey || $qComment === $searchKey || 
-                    str_contains($qName, $searchKey) || 
-                    str_contains($qComment, $searchKey) ||
-                    ($customerIp && str_contains($qTarget, $customerIp))) {
-                    return $q;
+                // Format IP/32 (MikroTik biasanya mencatat target statis sebagai IP/32)
+                $query = new Query('/queue/simple/print');
+                $query->equal('.proplist', '.id,name,target,comment,max-limit');
+                $query->equal('target', $cleanIp . '/32');
+                $queues = $client->query($query)->read();
+                if (!empty($queues)) {
+                    return $queues[0];
+                }
+
+                // Format IP biasa
+                $query = new Query('/queue/simple/print');
+                $query->equal('.proplist', '.id,name,target,comment,max-limit');
+                $query->equal('target', $cleanIp);
+                $queues = $client->query($query)->read();
+                if (!empty($queues)) {
+                    return $queues[0];
+                }
+            }
+
+            // 4. Fallback Terakhir: Lakukan scan parsial jika kueri langsung tidak cocok
+            $query = new Query('/queue/simple/print');
+            $query->equal('.proplist', '.id,name,target,comment,max-limit');
+            $allQueues = $client->query($query)->read();
+
+            if (!empty($allQueues)) {
+                $searchLower = strtolower($searchKey);
+                $customerIp = $ipAddress ? trim($ipAddress) : null;
+
+                foreach ($allQueues as $q) {
+                    $qName = strtolower($q['name'] ?? '');
+                    $qComment = strtolower($q['comment'] ?? '');
+                    $qTarget = $q['target'] ?? '';
+                    
+                    if (str_contains($qName, $searchLower) || 
+                        str_contains($qComment, $searchLower) ||
+                        ($customerIp && str_contains($qTarget, $customerIp))) {
+                        return $q;
+                    }
                 }
             }
         } catch (\Exception $e) {
