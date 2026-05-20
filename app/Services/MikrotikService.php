@@ -249,24 +249,51 @@ class MikrotikService
             $client = $this->getConnection($router);
             if (!$client) return 'ROUTER_OFFLINE';
 
-            $path = ($type === 'pppoe') ? '/ppp/active' : '/ip/hotspot/active';
-            
-            $query = new Query($path . '/print');
-            $query->equal('name', $username);
-            $active = $client->query($query)->read();
+            if ($type === 'pppoe') {
+                $path = '/ppp/active';
+                $query = new Query($path . '/print');
+                $query->equal('name', $username);
+                $active = $client->query($query)->read();
 
-            if (!empty($active)) {
-                return $active[0]['address'] ?? null;
-            }
+                if (!empty($active)) {
+                    return $active[0]['address'] ?? null;
+                }
 
-            // Fallback: Check in secrets for static remote-address
-            $secretPath = ($type === 'pppoe') ? '/ppp/secret' : '/ip/hotspot/user';
-            $querySecret = new Query($secretPath . '/print');
-            $querySecret->equal('name', $username);
-            $secret = $client->query($querySecret)->read();
+                $querySecret = new Query('/ppp/secret/print');
+                $querySecret->equal('name', $username);
+                $secret = $client->query($querySecret)->read();
 
-            if (!empty($secret)) {
-                return $secret[0]['remote-address'] ?? $secret[0]['address'] ?? null;
+                if (!empty($secret)) {
+                    return $secret[0]['remote-address'] ?? null;
+                }
+            } elseif ($type === 'hotspot') {
+                $path = '/ip/hotspot/active';
+                $query = new Query($path . '/print');
+                $query->equal('name', $username);
+                $active = $client->query($query)->read();
+
+                if (!empty($active)) {
+                    return $active[0]['address'] ?? null;
+                }
+
+                $querySecret = new Query('/ip/hotspot/user/print');
+                $querySecret->equal('name', $username);
+                $secret = $client->query($querySecret)->read();
+
+                if (!empty($secret)) {
+                    return $secret[0]['address'] ?? null;
+                }
+            } elseif ($type === 'static') {
+                // For static type, we check if the simple queue exists on Mikrotik!
+                $targetQueue = $this->findSimpleQueue($client, $username, null, $router);
+                if (!empty($targetQueue)) {
+                    $address = $targetQueue['target'] ?? '';
+                    $address = str_replace('/32', '', $address);
+                    if (str_contains($address, '/')) {
+                        $address = explode('/', $address)[0];
+                    }
+                    return $address ?: 'STATIC_ONLINE';
+                }
             }
 
             return null;

@@ -55,4 +55,22 @@ class Pelanggan extends Model
     {
         return $this->hasMany(TiketGangguan::class, 'id_pelanggan', 'id_pelanggan');
     }
+
+    public function getWifiProfileAttribute()
+    {
+        $harga = $this->harga_layanan;
+        $hargaK = number_format($harga / 1000, 0, ',', '.') . '.k';
+        switch ($harga) {
+            case 100000:
+                return "Paket 1 {$hargaK}";
+            case 130000:
+                return "Paket 2 {$hargaK}";
+            case 150000:
+                return "Paket 3 {$hargaK}";
+            case 200000:
+                return "Paket 4 {$hargaK}";
+            default:
+                return "Paket {$hargaK}";
+        }
+    }
 }
