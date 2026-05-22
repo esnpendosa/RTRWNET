@@ -130,6 +130,10 @@
         </div>
         <span class="fw-semibold d-block mb-1">Total Pendapatan (Bulan Ini)</span>
         <h3 class="card-title mb-2">Rp {{ number_format($stats['total_pendapatan'], 0, ',', '.') }}</h3>
+        <div class="d-flex justify-content-between text-sm mt-3 border-top pt-2">
+          <span class="text-success fw-semibold"><i class='bx bx-money'></i> Cash: Rp {{ number_format($stats['total_pendapatan_cash'], 0, ',', '.') }}</span>
+          <span class="text-primary fw-semibold"><i class='bx bx-transfer'></i> TF: Rp {{ number_format($stats['total_pendapatan_transfer'], 0, ',', '.') }}</span>
+        </div>
       </div>
     </div>
   </div>

@@ -140,8 +140,10 @@ class PaymentController extends Controller
         $pelanggan = $tagihan->pelanggan;
         if ($pelanggan && $pelanggan->id_router) {
             // Re-enable Mikrotik Service
-            $this->mikrotikService->setSecretStatus($pelanggan->router, $pelanggan->mikrotik_username ?: $pelanggan->kode_pelanggan, $pelanggan->mikrotik_type, false, $pelanggan->ip_address);
-            $pelanggan->update(['is_active' => true]);
+            $success = $this->mikrotikService->setSecretStatus($pelanggan->router, $pelanggan->mikrotik_username ?: $pelanggan->kode_pelanggan, $pelanggan->mikrotik_type, false, $pelanggan->ip_address);
+            if ($success) {
+                $pelanggan->update(['is_active' => true]);
+            }
         }
 
         // Kirim Notifikasi WA (Proaktif untuk Payment Gateway)

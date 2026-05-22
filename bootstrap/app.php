@@ -11,6 +11,8 @@ return Application::configure(basePath: dirname(__DIR__))
     health: '/up',
   )
   ->withSchedule(function (\Illuminate\Console\Scheduling\Schedule $schedule) {
+      $schedule->command('billing:generate')->dailyAt('01:00')->withoutOverlapping();
+      $schedule->command('billing:remind')->dailyAt('08:00')->withoutOverlapping();
       $schedule->command('billing:disable-unpaid')->hourly()->withoutOverlapping();
       $schedule->command('billing:enable-paid')->everyFiveMinutes()->withoutOverlapping(); // Auto-ON jika sudah bayar
       $schedule->command('mikrotik:sync-all')->everyFiveMinutes()->withoutOverlapping();

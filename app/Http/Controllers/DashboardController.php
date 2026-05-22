@@ -64,6 +64,8 @@ class DashboardController extends Controller
             'tagihan_lunas' => \App\Models\Tagihan::where('status', 'paid')->where('bulan', $currentMonth)->where('tahun', $currentYear)->count(),
             'tagihan_unpaid' => \App\Models\Tagihan::where('status', 'unpaid')->where('bulan', $currentMonth)->where('tahun', $currentYear)->count(),
             'total_pendapatan' => \App\Models\Tagihan::where('status', 'paid')->where('bulan', $currentMonth)->where('tahun', $currentYear)->sum('jumlah'),
+            'total_pendapatan_cash' => \App\Models\Tagihan::where('status', 'paid')->where('metode_pembayaran', 'Cash')->where('bulan', $currentMonth)->where('tahun', $currentYear)->sum('jumlah'),
+            'total_pendapatan_transfer' => \App\Models\Tagihan::where('status', 'paid')->where('metode_pembayaran', '!=', 'Cash')->where('bulan', $currentMonth)->where('tahun', $currentYear)->sum('jumlah'),
             'total_tagihan_lunas' => \App\Models\Tagihan::where('status', 'paid')->count(),
             'total_tagihan_unpaid' => \App\Models\Tagihan::where('status', 'unpaid')->count(),
             'total_pendapatan_all' => \App\Models\Tagihan::where('status', 'paid')->sum('jumlah'),

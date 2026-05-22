@@ -83,6 +83,7 @@
                     @php
                         $genDate    = \App\Models\Setting::get('billing_generate_date', '1');
                         $startDate  = \App\Models\Setting::get('billing_start_date', '1');
+                        $remindDate = \App\Models\Setting::get('billing_reminder_date', '5');
                         $isolirDate = \App\Models\Setting::get('billing_isolir_date', '10');
                         $isolirHour = \App\Models\Setting::get('billing_isolir_hour', '12');
                     @endphp
@@ -90,6 +91,7 @@
                         <strong>📅 Alur Billing Bulan Ini:</strong><br>
                         🔔 Tgl <strong>{{ $genDate }}</strong> → Tagihan dibuat & notif WA terkirim<br>
                         💳 Tgl <strong>{{ $startDate }}</strong> → Mulai bisa bayar (periode pembayaran dibuka)<br>
+                        📢 Tgl <strong>{{ $remindDate }}</strong> → Pengingat (Reminder) tagihan belum bayar dikirim via WA<br>
                         ⚠️ Tgl <strong>{{ $isolirDate }}</strong> Jam <strong>{{ sprintf('%02d:00', $isolirHour) }}</strong> → Jatuh tempo, internet dimatikan jika belum bayar
                     </div>
 
@@ -113,6 +115,15 @@
                             <small class="text-muted">Periode pembayaran mulai dibuka.</small>
                         </div>
                         <div class="col-md-4">
+                            <label class="form-label fw-bold">📢 Tanggal Reminder WA</label>
+                            <select name="billing_reminder_date" class="form-select">
+                                @for($i=1; $i<=28; $i++)
+                                    <option value="{{ $i }}" {{ $remindDate == $i ? 'selected' : '' }}>Tanggal {{ $i }}</option>
+                                @endfor
+                            </select>
+                            <small class="text-muted">Notif WA bagi yang belum bayar.</small>
+                        </div>
+                        <div class="col-md-4">
                             <label class="form-label fw-bold">⚠️ Tanggal Jatuh Tempo (Isolir)</label>
                             <select name="billing_isolir_date" class="form-select">
                                 @for($i=1; $i<=28; $i++)
@@ -130,12 +141,26 @@
                             </select>
                             <small class="text-muted">Waktu eksekusi pemutusan internet.</small>
                         </div>
-                        <div class="col-md-12">
-                            <div class="form-check form-switch mt-2">
-                                <input class="form-check-input" type="checkbox" name="auto_isolir_enabled" id="auto_isolir" {{ \App\Models\Setting::get('billing_auto_isolir_enabled', '1') == '1' ? 'checked' : '' }}>
-                                <label class="form-check-label fw-bold" for="auto_isolir">Aktifkan Isolir Otomatis (On/Off Internet via Mikrotik)</label>
+                        
+                        <div class="col-md-12 mt-4 border-top pt-3">
+                            <h6 class="mb-3">Konfigurasi Job Otomatis (Cron)</h6>
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" name="auto_generate_enabled" id="auto_gen" {{ \App\Models\Setting::get('billing_auto_generate_enabled', '1') == '1' ? 'checked' : '' }}>
+                                <label class="form-check-label fw-bold" for="auto_gen">Aktifkan Pembuatan Tagihan Otomatis</label>
                             </div>
-                            <small class="text-muted">Jika dinonaktifkan, internet tidak akan dimatikan otomatis meski sudah melewati jatuh tempo.</small>
+                            <small class="text-muted d-block mb-3">Jika dimatikan, tagihan bulan baru tidak akan dibuat otomatis.</small>
+
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" name="reminder_enabled" id="auto_remind" {{ \App\Models\Setting::get('billing_reminder_enabled', '1') == '1' ? 'checked' : '' }}>
+                                <label class="form-check-label fw-bold" for="auto_remind">Aktifkan Reminder Tagihan Otomatis</label>
+                            </div>
+                            <small class="text-muted d-block mb-3">Jika dimatikan, notif reminder WA tidak akan terkirim.</small>
+
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" name="auto_isolir_enabled" id="auto_isolir" {{ \App\Models\Setting::get('billing_auto_isolir_enabled', '1') == '1' ? 'checked' : '' }}>
+                                <label class="form-check-label fw-bold" for="auto_isolir">Aktifkan Isolir Otomatis (On/Off Mikrotik)</label>
+                            </div>
+                            <small class="text-muted d-block mb-3">Jika dimatikan, internet tidak akan dimatikan otomatis meski lewat jatuh tempo.</small>
                         </div>
                     </div>
                     <button type="submit" class="btn btn-info mt-3">💾 Simpan Pengaturan Otomatisasi</button>

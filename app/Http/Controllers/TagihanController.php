@@ -74,8 +74,10 @@ class TagihanController extends Controller
             $pelanggan = $tagihan->pelanggan;
             if ($pelanggan && $pelanggan->id_router) {
                 $mikrotikService = app(\App\Services\MikrotikService::class);
-                $mikrotikService->setSecretStatus($pelanggan->router, $pelanggan->mikrotik_username ?: $pelanggan->kode_pelanggan, $pelanggan->mikrotik_type, false, $pelanggan->ip_address);
-                $pelanggan->update(['is_active' => true]);
+                $success = $mikrotikService->setSecretStatus($pelanggan->router, $pelanggan->mikrotik_username ?: $pelanggan->kode_pelanggan, $pelanggan->mikrotik_type, false, $pelanggan->ip_address);
+                if ($success) {
+                    $pelanggan->update(['is_active' => true]);
+                }
             }
 
             // Kirim Nota
@@ -226,8 +228,10 @@ class TagihanController extends Controller
         $pelanggan = $tagihan->pelanggan;
         if ($pelanggan && $pelanggan->id_router) {
             $mikrotikService = app(\App\Services\MikrotikService::class);
-            $mikrotikService->setSecretStatus($pelanggan->router, $pelanggan->mikrotik_username ?: $pelanggan->kode_pelanggan, $pelanggan->mikrotik_type, false, $pelanggan->ip_address);
-            $pelanggan->update(['is_active' => true]);
+            $success = $mikrotikService->setSecretStatus($pelanggan->router, $pelanggan->mikrotik_username ?: $pelanggan->kode_pelanggan, $pelanggan->mikrotik_type, false, $pelanggan->ip_address);
+            if ($success) {
+                $pelanggan->update(['is_active' => true]);
+            }
         }
 
         // Kirim Notifikasi WA jika nomor WA ada
@@ -267,11 +271,15 @@ class TagihanController extends Controller
         \App\Models\Setting::set('manual_bank_info', $request->bank_info, 'payment');
 
         // New Automation Settings
+        \App\Models\Setting::set('billing_auto_generate_enabled', $request->auto_generate_enabled ? '1' : '0', 'automation');
         \App\Models\Setting::set('billing_generate_date', $request->billing_generate_date ?? '1', 'automation');
         \App\Models\Setting::set('billing_start_date', $request->billing_start_date ?? '1', 'automation');
         \App\Models\Setting::set('billing_isolir_date', $request->billing_isolir_date ?? '10', 'automation');
         \App\Models\Setting::set('billing_isolir_hour', $request->billing_isolir_hour ?? '12', 'automation');
         \App\Models\Setting::set('billing_auto_isolir_enabled', $request->auto_isolir_enabled ? '1' : '0', 'automation');
+        
+        \App\Models\Setting::set('billing_reminder_enabled', $request->reminder_enabled ? '1' : '0', 'automation');
+        \App\Models\Setting::set('billing_reminder_date', $request->billing_reminder_date ?? '5', 'automation');
 
         return back()->with('success', 'Pengaturan pembayaran dan otomatisasi berhasil diperbarui.');
     }
@@ -308,8 +316,10 @@ class TagihanController extends Controller
         $pelanggan = $tagihan->pelanggan;
         if ($pelanggan && $pelanggan->id_router) {
             $mikrotikService = app(\App\Services\MikrotikService::class);
-            $mikrotikService->setSecretStatus($pelanggan->router, $pelanggan->mikrotik_username ?: $pelanggan->kode_pelanggan, $pelanggan->mikrotik_type, false, $pelanggan->ip_address);
-            $pelanggan->update(['is_active' => true]);
+            $success = $mikrotikService->setSecretStatus($pelanggan->router, $pelanggan->mikrotik_username ?: $pelanggan->kode_pelanggan, $pelanggan->mikrotik_type, false, $pelanggan->ip_address);
+            if ($success) {
+                $pelanggan->update(['is_active' => true]);
+            }
         }
 
         // Kirim Notifikasi WA Kwitansi Lunas

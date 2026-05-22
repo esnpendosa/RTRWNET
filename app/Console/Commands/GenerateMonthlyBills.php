@@ -25,6 +25,12 @@ class GenerateMonthlyBills extends Command
      */
     public function handle()
     {
+        $enabled = \App\Models\Setting::get('billing_auto_generate_enabled', '1');
+        if ($enabled != '1') {
+            $this->info('Auto bill generation is disabled in settings.');
+            return;
+        }
+
         $genDate = (int) \App\Models\Setting::get('billing_generate_date', '1');
         
         if (now()->day != $genDate) {

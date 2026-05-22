@@ -143,19 +143,19 @@ class MikrotikService
             // 1. Coba cari langsung berdasarkan Name (Paling Cepat & Akurat!)
             $query = new Query('/queue/simple/print');
             $query->equal('.proplist', '.id,name,target,comment,max-limit');
-            $query->equal('name', $searchKey);
+            $query->where('name', $searchKey);
             $queues = $client->query($query)->read();
-            if (!empty($queues)) {
-                return $queues[0];
+            if (!empty($queues) && !isset($queues['after'])) {
+                if (isset($queues[0])) return $queues[0];
             }
 
             // 2. Coba cari langsung berdasarkan Comment
             $query = new Query('/queue/simple/print');
             $query->equal('.proplist', '.id,name,target,comment,max-limit');
-            $query->equal('comment', $searchKey);
+            $query->where('comment', $searchKey);
             $queues = $client->query($query)->read();
-            if (!empty($queues)) {
-                return $queues[0];
+            if (!empty($queues) && !isset($queues['after'])) {
+                if (isset($queues[0])) return $queues[0];
             }
 
             // 3. Coba cari langsung berdasarkan Target IP
@@ -165,19 +165,19 @@ class MikrotikService
                 // Format IP/32 (MikroTik biasanya mencatat target statis sebagai IP/32)
                 $query = new Query('/queue/simple/print');
                 $query->equal('.proplist', '.id,name,target,comment,max-limit');
-                $query->equal('target', $cleanIp . '/32');
+                $query->where('target', $cleanIp . '/32');
                 $queues = $client->query($query)->read();
-                if (!empty($queues)) {
-                    return $queues[0];
+                if (!empty($queues) && !isset($queues['after'])) {
+                    if (isset($queues[0])) return $queues[0];
                 }
 
                 // Format IP biasa
                 $query = new Query('/queue/simple/print');
                 $query->equal('.proplist', '.id,name,target,comment,max-limit');
-                $query->equal('target', $cleanIp);
+                $query->where('target', $cleanIp);
                 $queues = $client->query($query)->read();
-                if (!empty($queues)) {
-                    return $queues[0];
+                if (!empty($queues) && !isset($queues['after'])) {
+                    if (isset($queues[0])) return $queues[0];
                 }
             }
 
