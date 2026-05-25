@@ -526,30 +526,116 @@ class MikrotikService
                 }
 
                 // 3. Update Firewall Filter Rule (Custom method requested by user)
-                // Mencari rule dengan comment yang sama dengan username/kode pelanggan
-                $filterQuery = new Query('/ip/firewall/filter/print');
-                $filterQuery->where('comment', $username);
+                // Mencari rule secara cerdas: mencakup pencocokan komentar secara case-insensitive ATAU pencocokan IP tujuan
+                $filterPath = '/ip/firewall/filter';
+                $filterQuery = new Query($filterPath . '/print');
                 $filterResp = $client->query($filterQuery)->read();
                 
-                if (!empty($filterResp)) {
+                $targetRule = null;
+                if (is_array($filterResp)) {
                     foreach ($filterResp as $filter) {
-                        // Update existing rule
-                        $client->query((new Query('/ip/firewall/filter/set'))
-                            ->equal('.id', $filter['.id'])
-                            ->equal('dst-address', $ip) // Pastikan IP sesuai
-                            ->equal('disabled', $disable ? 'no' : 'yes'))->read();
+                        $fChain = $filter['chain'] ?? '';
+                        $fAction = $filter['action'] ?? '';
+                        $fComment = $filter['comment'] ?? '';
+                        $fDstAddr = $filter['dst-address'] ?? '';
+                        
+                        if ($fChain === 'forward' && $fAction === 'drop') {
+                            $commentMatch = (strtolower(trim($fComment)) === strtolower(trim($username)));
+                            $ipMatch = ($ip && strpos($fDstAddr, $ip) !== false);
+                            
+                            if ($commentMatch || $ipMatch) {
+                                $targetRule = $filter;
+                                break;
+                            }
+                        }
                     }
-                } elseif ($disable && $ip) {
-                    // Buat rule baru jika sedang isolir dan rule belum ada
-                    $addFilterQuery = (new Query('/ip/firewall/filter/add'))
-                        ->equal('chain', 'forward')
-                        ->equal('action', 'drop')
-                        ->equal('dst-address', $ip)
-                        ->equal('comment', $username)
-                        ->equal('disabled', 'no'); // Langsung aktif (blokir)
-                    $client->query($addFilterQuery)->read();
+                }
+                
+                if (!$targetRule) {
+                    // Jika rule belum ada, buat baru di urutan paling ATAS (place-before=0)
+                    if ($ip) {
+                        $addFilterQuery = (new Query($filterPath . '/add'))
+                            ->equal('chain', 'forward')
+                            ->equal('action', 'drop')
+                            ->equal('dst-address', $ip)
+                            ->equal('comment', $username)
+                            ->equal('disabled', $disable ? 'no' : 'yes')
+                            ->equal('place-before', '0'); // Taruh di paling atas
+                        $client->query($addFilterQuery)->read();
+                    }
+                } else {
+                    $id = $targetRule['.id'];
+                    
+                    // Set status dan pindahkan ke urutan 0 untuk memastikan pemblokiran bekerja
+                    $setQuery = (new Query($filterPath . '/set'))
+                        ->equal('.id', $id)
+                        ->equal('dst-address', $ip) // Pastikan IP sesuai
+                        ->equal('disabled', $disable ? 'no' : 'yes');
+                    $client->query($setQuery)->read();
+                    
+                    // Pindahkan ke paling atas (hanya jika sedang diisolir)
+                    if ($disable) {
+                        $moveQuery = (new Query($filterPath . '/move'))
+                            ->equal('.id', $id)
+                            ->equal('destination', '0');
+                        $client->query($moveQuery)->read();
+                    }
                 }
                 $found = true;
+
+                // Clear active connections and ARP table if un-isolating
+                if (!$disable && $ip) {
+                    // 1. Clear Active Connections from MikroTik Connection Tracking
+                    try {
+                        $conSrc = (new Query('/ip/firewall/connection/print'))->add('?src-address~' . $ip);
+                        $conSrcResp = $client->query($conSrc)->read();
+                        
+                        $conDst = (new Query('/ip/firewall/connection/print'))->add('?dst-address~' . $ip);
+                        $conDstResp = $client->query($conDst)->read();
+                        
+                        $connections = [];
+                        if (is_array($conSrcResp)) {
+                            foreach ($conSrcResp as $c) {
+                                if (isset($c['.id'])) {
+                                    $connections[$c['.id']] = $c;
+                                }
+                            }
+                        }
+                        if (is_array($conDstResp)) {
+                            foreach ($conDstResp as $c) {
+                                if (isset($c['.id'])) {
+                                    $connections[$c['.id']] = $c;
+                                }
+                            }
+                        }
+                        
+                        foreach ($connections as $connId => $conn) {
+                            $client->query((new Query('/ip/firewall/connection/remove'))
+                                ->equal('.id', $connId))->read();
+                        }
+                        \Log::info("MikrotikService: Cleared " . count($connections) . " Conntrack connections for IP: " . $ip);
+                    } catch (\Exception $e) {
+                        \Log::warning("MikrotikService: Failed to clear Conntrack for IP {$ip}: " . $e->getMessage());
+                    }
+
+                    // 2. Clear Stale ARP Entry from MikroTik ARP Table
+                    try {
+                        $arpQuery = (new Query('/ip/arp/print'))->where('address', $ip);
+                        $arpResp = $client->query($arpQuery)->read();
+                        
+                        if (is_array($arpResp)) {
+                            foreach ($arpResp as $arp) {
+                                if (isset($arp['.id'])) {
+                                    $client->query((new Query('/ip/arp/remove'))
+                                        ->equal('.id', $arp['.id']))->read();
+                                }
+                            }
+                            \Log::info("MikrotikService: Flushed ARP entry for IP: " . $ip);
+                        }
+                    } catch (\Exception $e) {
+                        \Log::warning("MikrotikService: Failed to clear ARP entry for IP {$ip}: " . $e->getMessage());
+                    }
+                }
             }
 
             if (!$found) {
