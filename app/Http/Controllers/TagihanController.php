@@ -97,15 +97,89 @@ class TagihanController extends Controller
     public function destroy(Tagihan $tagihan)
     {
         if (auth()->user()->id_role != 1) abort(403);
-        $tagihan->delete();
-        return back()->with('success', 'Tagihan berhasil dihapus.');
+
+        try {
+            // Hapus file fisik bukti transfer jika ada
+            if ($tagihan->bukti_bayar) {
+                $filePath = storage_path('app/public/' . $tagihan->bukti_bayar);
+                if (file_exists($filePath)) {
+                    @unlink($filePath);
+                }
+            }
+
+            $tagihan->delete();
+
+            return back()->with('success', 'Tagihan berhasil dihapus.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Gagal menghapus tagihan: ' . $e->getMessage());
+        }
     }
 
     public function deleteAll()
     {
         if (auth()->user()->id_role != 1) abort(403);
-        Tagihan::truncate();
-        return back()->with('success', 'Semua data tagihan berhasil dikosongkan.');
+
+        try {
+            // Hapus semua file fisik bukti transfer terlebih dahulu
+            $tagihans = Tagihan::whereNotNull('bukti_bayar')->get();
+            foreach ($tagihans as $t) {
+                $filePath = storage_path('app/public/' . $t->bukti_bayar);
+                if (file_exists($filePath)) {
+                    @unlink($filePath);
+                }
+            }
+
+            // Hapus semua data secara aman
+            Tagihan::query()->delete();
+
+            return back()->with('success', 'Semua tagihan berhasil dikosongkan.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Gagal mengosongkan data tagihan: ' . $e->getMessage());
+        }
+    }
+
+    public function destroyDirect(Tagihan $tagihan)
+    {
+        if (auth()->user()->id_role != 1) abort(403);
+
+        try {
+            // Hapus file fisik bukti transfer jika ada
+            if ($tagihan->bukti_bayar) {
+                $filePath = storage_path('app/public/' . $tagihan->bukti_bayar);
+                if (file_exists($filePath)) {
+                    @unlink($filePath);
+                }
+            }
+
+            $tagihan->delete();
+
+            return back()->with('success', 'Tagihan berhasil dihapus.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Gagal menghapus tagihan: ' . $e->getMessage());
+        }
+    }
+
+    public function deleteAllDirect()
+    {
+        if (auth()->user()->id_role != 1) abort(403);
+
+        try {
+            // Hapus semua file fisik bukti transfer terlebih dahulu
+            $tagihans = Tagihan::whereNotNull('bukti_bayar')->get();
+            foreach ($tagihans as $t) {
+                $filePath = storage_path('app/public/' . $t->bukti_bayar);
+                if (file_exists($filePath)) {
+                    @unlink($filePath);
+                }
+            }
+
+            // Hapus semua data secara aman
+            Tagihan::query()->delete();
+
+            return back()->with('success', 'Semua tagihan berhasil dikosongkan.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Gagal mengosongkan data tagihan: ' . $e->getMessage());
+        }
     }
 
     public function generateMonthlyBills(Request $request)
