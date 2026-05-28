@@ -13,13 +13,39 @@ class ScanController extends Controller
 
     public function process(Request $request)
     {
-        $code = $request->code;
-        // Logic to handle scanned code (Pelanggan ID or Inventory ID)
-        if (strpos($code, 'AD') === 0) {
-            return redirect()->route('payment.by-id', ['kode_pelanggan' => $code]);
+        $code = trim($request->code);
+
+        // 1. Ekstrak kode pencarian jika input berupa URL lengkap (misal: http://.../billing?search=KTR01)
+        if (filter_var($code, FILTER_VALIDATE_URL)) {
+            $parsedUrl = parse_url($code);
+            if (isset($parsedUrl['query'])) {
+                parse_str($parsedUrl['query'], $queryParams);
+                if (isset($queryParams['search'])) {
+                    $code = trim($queryParams['search']);
+                }
+            } else {
+                // Ambil segmen terakhir URL sebagai fallback
+                $pathSegments = explode('/', trim($parsedUrl['path'], '/'));
+                $code = end($pathSegments);
+            }
         }
 
-        // Check Inventory
+        // 2. Cek apakah kode cocok dengan pelanggan terdaftar
+        $pelanggan = \App\Models\Pelanggan::where('kode_pelanggan', $code)
+            ->orWhere('id_pelanggan', $code)
+            ->orWhere('mikrotik_username', $code)
+            ->first();
+
+        if ($pelanggan) {
+            return redirect()->route('billing.index', ['search' => $pelanggan->kode_pelanggan]);
+        }
+
+        // 3. Fallback jika kode diawali AD (backward compatibility)
+        if (strpos($code, 'AD') === 0) {
+            return redirect()->route('billing.index', ['search' => $code]);
+        }
+
+        // 4. Cek apakah cocok dengan inventaris
         $inventory = \App\Models\InventoryItem::where('serial_number', $code)
             ->orWhere('id_inventory', $code)
             ->first();

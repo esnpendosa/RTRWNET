@@ -64,9 +64,9 @@ class MonitorPelanggan extends Command
                 $msg .= "--------------------------\n";
                 $msg .= "Mohon cek koneksi atau hubungi pelanggan.";
 
-                // Notify Admin (Tetap aktif agar admin tahu status jaringan)
-                $targetJid = str_contains($adminNum, '@') ? $adminNum : $adminNum . "@s.whatsapp.net";
-                $waClient->sendMessage($targetJid, ['text' => $msg]);
+                // Notify Admin (Disabled by request)
+                // $targetJid = str_contains($adminNum, '@') ? $adminNum : $adminNum . "@s.whatsapp.net";
+                // $waClient->sendMessage($targetJid, ['text' => $msg]);
                 
                 // JANGAN kirim notifikasi offline ke pelanggan agar tidak risih
                 /*
@@ -75,7 +75,7 @@ class MonitorPelanggan extends Command
                 }
                 */
 
-                Log::info("Offline alert sent to Admin for customer: " . $p->nama_pelanggan);
+                Log::info("Offline status detected for customer: " . $p->nama_pelanggan);
             } 
             // If status changed from Offline to Online
             elseif (!$p->last_online_status && $isOnline) {
@@ -86,9 +86,9 @@ class MonitorPelanggan extends Command
                 $msg .= "IP Baru: " . $currentIp . "\n";
                 $msg .= "Waktu: " . now()->format('H:i:s d/m/Y');
 
-                // Notify Admin (Tetap aktif agar admin tahu status jaringan)
-                $targetJid = str_contains($adminNum, '@') ? $adminNum : $adminNum . "@s.whatsapp.net";
-                $waClient->sendMessage($targetJid, ['text' => $msg]);
+                // Notify Admin (Disabled by request)
+                // $targetJid = str_contains($adminNum, '@') ? $adminNum : $adminNum . "@s.whatsapp.net";
+                // $waClient->sendMessage($targetJid, ['text' => $msg]);
             }
 
             // Update database

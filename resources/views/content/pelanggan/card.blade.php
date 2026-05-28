@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kartu Pelanggan Rozitech</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <style>
         @page {
             size: A4;
@@ -178,9 +179,10 @@
             border-top: 1px dashed #e1e4e8;
         }
 
-        .barcode-img {
-            height: 15px;
-            opacity: 0.7;
+        .barcode-img, .barcode-svg {
+            height: 20px;
+            opacity: 0.85;
+            max-width: 100px;
         }
 
         .web-info {
@@ -278,7 +280,7 @@
             </div>
 
             <div class="card-footer">
-                <img src="https://barcode.tec-it.com/barcode.ashx?data={{ $p->kode_pelanggan }}&code=Code128&translate-esc=on" class="barcode-img" alt="Barcode">
+                <svg class="barcode-svg" id="barcode-{{ $p->kode_pelanggan }}"></svg>
                 <div class="web-info">rozitech.co.id</div>
             </div>
 
@@ -287,5 +289,23 @@
         @endforeach
     </div>
 
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            @foreach($pelanggans as $p)
+            try {
+                JsBarcode("#barcode-{{ $p->kode_pelanggan }}", "{{ $p->kode_pelanggan }}", {
+                    format: "CODE128",
+                    lineColor: "#000",
+                    width: 1.2,
+                    height: 25,
+                    displayValue: false,
+                    margin: 0
+                });
+            } catch(e) {
+                console.error("Gagal membuat barcode untuk {{ $p->kode_pelanggan }}:", e);
+            }
+            @endforeach
+        });
+    </script>
 </body>
 </html>

@@ -10,27 +10,29 @@ use App\Models\KnnDetailTetangga;
 class KnnService
 {
     /**
-     * Calculate Haversine Distance between two coordinates in Kilometers
+     * Calculate 4-Dimensional Euclidean Distance (as per thesis)
+     * Features: Latitude (scaled * 10^5), Longitude (scaled * 10^5), Usage_GB, Jumlah_Device
      */
-    public function haversineDistance($lat1, $lon1, $lat2, $lon2)
+    public function euclideanDistance4D($lat1, $lon1, $usage1, $dev1, $lat2, $lon2, $usage2, $dev2)
     {
-        $earthRadius = 6371; // km
-
-        $dLat = deg2rad($lat2 - $lat1);
-        $dLon = deg2rad($lon2 - $lon1);
-
-        $a = sin($dLat / 2) * sin($dLat / 2) +
-             cos(deg2rad($lat1)) * cos(deg2rad($lat2)) *
-             sin($dLon / 2) * sin($dLon / 2);
+        // Scale coordinates by 10^5 (100,000) as per thesis manual calculation (e.g. Sari vs Ruqoiyah)
+        $scaledLat1 = (double)$lat1 * 100000;
+        $scaledLon1 = (double)$lon1 * 100000;
         
-        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
-        
-        return $earthRadius * $c;
+        $scaledLat2 = (double)$lat2 * 100000;
+        $scaledLon2 = (double)$lon2 * 100000;
+
+        return sqrt(
+            pow($scaledLat1 - $scaledLat2, 2) +
+            pow($scaledLon1 - $scaledLon2, 2) +
+            pow((double)$usage1 - (double)$usage2, 2) +
+            pow((double)$dev1 - (double)$dev2, 2)
+        );
     }
 
     /**
      * Classify a customer based on training data
-     * Features: Location (Spatial KNN), Usage, Device, Price
+     * Features: Latitude, Longitude, Usage_GB, Jumlah_Device
      */
     public function classify($targetPelangganId, $k = 3)
     {
@@ -47,64 +49,82 @@ class KnnService
 
         $distances = [];
         foreach ($trainingSet as $train) {
-            // Jarak Fisik Nyata (KM) - Sesuai Kebutuhan Optimasi Peta
-            $distKM = $this->haversineDistance(
-                $target->latitude, $target->longitude,
-                $train->latitude, $train->longitude
+            $dist = $this->euclideanDistance4D(
+                $target->latitude, $target->longitude, $target->usage_gb, $target->jumlah_device,
+                $train->latitude, $train->longitude, $train->usage_gb, $train->jumlah_device
             );
             
             $distances[] = [
                 'id_pelanggan' => $train->id_pelanggan,
-                'distance_km' => $distKM,
-                'label' => $train->prioritas_label
+                'distance' => $dist,
+                'label' => $train->prioritas_label,
+                'nama' => $train->nama_pelanggan
             ];
         }
 
-        // Urutkan berdasarkan jarak terdekat (KM)
+        // Sort by distance (smallest to largest)
         usort($distances, function($a, $b) {
-            return $a['distance_km'] <=> $b['distance_km'];
+            return $a['distance'] <=> $b['distance'];
         });
 
-        // Ambil K Tetangga Terdekat secara Spasial
+        // Take K nearest neighbors
         $neighbors = array_slice($distances, 0, $k);
 
         // Voting Label
         $votes = [];
         foreach ($neighbors as $n) {
-            $label = $n['label'];
-            if ($label == 'High') $label = 'Sangat Prioritas';
-            if ($label == 'Medium') $label = 'Prioritas';
-            if ($label == 'Low') $label = 'Tidak Prioritas';
+            $label = strtoupper($n['label']);
+            
+            // Standardize labels to match thesis EXACTLY
+            if ($label === 'SANGAT PRIORITAS' || $label === 'HIGH') {
+                $label = 'HIGH';
+            } elseif ($label === 'PRIORITAS' || $label === 'MEDIUM') {
+                $label = 'MEDIUM';
+            } else {
+                $label = 'LOW';
+            }
+            
             $votes[$label] = ($votes[$label] ?? 0) + 1;
         }
 
         arsort($votes);
         $resultLabel = key($votes);
 
-        // Simpan Hasil dengan Jarak KM yang mudah dibaca
+        // Store KNN Parameter
         $param = KnnParameter::create([
             'nilai_k' => $k,
-            'distance_metric' => 'Haversine (KM) - Map Optimized'
+            'distance_metric' => 'Euclidean (4D) - Thesis Match'
         ]);
 
+        // Store KNN Classification result
         $hasil = KnnHasil::create([
             'id_pelanggan' => $targetPelangganId,
             'id_knn_param' => $param->id_knn_param,
-            'jarak_min' => $neighbors[0]['distance_km'], // Menggunakan KM
+            'jarak_min' => $neighbors[0]['distance'],
             'label_hasil' => $resultLabel
         ]);
 
+        // Store details of K nearest neighbors
         foreach ($neighbors as $index => $n) {
+            $neighborLabel = strtoupper($n['label']);
+            if ($neighborLabel === 'SANGAT PRIORITAS' || $neighborLabel === 'HIGH') {
+                $neighborLabel = 'HIGH';
+            } elseif ($neighborLabel === 'PRIORITAS' || $neighborLabel === 'MEDIUM') {
+                $neighborLabel = 'MEDIUM';
+            } else {
+                $neighborLabel = 'LOW';
+            }
+
             KnnDetailTetangga::create([
                 'id_knn_hasil' => $hasil->id_knn_hasil,
                 'urutan' => $index + 1,
                 'id_pelanggan_tetangga' => $n['id_pelanggan'],
-                'jarak_euclidean' => $n['distance_km'],
-                'label_tetangga' => $n['label']
+                'jarak_euclidean' => $n['distance'],
+                'label_tetangga' => $neighborLabel
             ]);
         }
 
-        // Update pelanggan label
+        // Update target customer label to standard value
         $target->update(['prioritas_label' => $resultLabel]);
 
         return $hasil;

@@ -194,6 +194,33 @@
                 <p class="text-muted small mt-2 mb-0">Gunakan tombol di atas untuk memaksa sistem mengecek status pembayaran dan mengupdate akses Mikrotik saat ini juga.</p>
             </div>
         </div>
+
+        <div class="card mb-4 border border-success shadow-sm">
+            <h5 class="card-header d-flex align-items-center">
+                <i class="bx bxl-whatsapp me-2 fs-4 text-success"></i> Manajemen Notifikasi WhatsApp (Global)
+            </h5>
+            <div class="card-body">
+                <p class="small text-muted mb-3">Gunakan sakelar di bawah ini untuk mematikan atau mengaktifkan pengiriman semua notifikasi WhatsApp otomatis ke nomor pelanggan tanpa menghapus nomor HP mereka dari database.</p>
+                
+                <form action="{{ route('settings.payment.update') }}" method="POST">
+                    @csrf
+                    <input type="hidden" name="wa_billing_switch_present" value="1">
+                    
+                    <div class="d-flex align-items-center justify-content-between p-3 bg-light rounded border">
+                        <div>
+                            <h6 class="mb-1">Status Pengiriman WhatsApp</h6>
+                            <span class="text-muted small">Notifikasi tagihan baru, reminder isolir, dan struk lunas.</span>
+                        </div>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="wa_billing_notification_enabled" id="wa_billing_card_switch" onchange="this.form.submit()" {{ \App\Models\Setting::get('wa_billing_notification_enabled', '1') == '1' ? 'checked' : '' }}>
+                            <label class="form-check-label fw-bold {{ \App\Models\Setting::get('wa_billing_notification_enabled', '1') == '1' ? 'text-success' : 'text-danger' }}" for="wa_billing_card_switch">
+                                {{ \App\Models\Setting::get('wa_billing_notification_enabled', '1') == '1' ? 'AKTIF (Mengirim WA)' : 'NON-AKTIF (Mati/Tidak Mengirim)' }}
+                            </label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
     <div class="col-md-4">
         <div class="card mb-4">

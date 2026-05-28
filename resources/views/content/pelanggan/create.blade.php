@@ -71,16 +71,16 @@
             </select>
         </div>
         <div class="col-md-6 mb-3">
-            <label class="form-label">Paket Layanan</label>
-            <select name="paket" id="paket_select" class="form-select">
-                <option value="">-- Pilih Paket --</option>
+            <label class="form-label">Paket maks</label>
+            <input type="text" name="paket" id="paket_select" list="paket_list" class="form-control" value="umum" placeholder="Masukkan atau pilih paket..." required />
+            <datalist id="paket_list">
+                <option value="umum">umum</option>
                 <option value="100rb 3mb">100rb 3mb</option>
                 <option value="120rb 8mb">120rb 8mb</option>
                 <option value="130rb 12mb">130rb 12mb</option>
                 <option value="150rb 20mb">150rb 20mb</option>
                 <option value="200rb 35mb">200rb 35mb</option>
-                <option value="custom">Custom</option>
-            </select>
+            </datalist>
         </div>
         <div class="col-md-6 mb-3">
             <label class="form-label">Harga Layanan (Rp)</label>
@@ -90,6 +90,13 @@
             <label class="form-label">Alamat IP (Static/ONT)</label>
             <input type="text" name="ip_address" class="form-control" placeholder="192.168.1.1" />
             <small class="text-muted">Diisi jika ingin monitoring IP spesifik secara manual</small>
+        </div>
+        <div class="col-md-6 mb-3">
+            <label class="form-label">Notifikasi WhatsApp Pelanggan</label>
+            <select name="wa_active" class="form-select">
+                <option value="1" selected>Aktif (Kirim WA)</option>
+                <option value="0">Non-Aktif (Matikan WA)</option>
+            </select>
         </div>
         <div class="col-md-6 mb-3">
             <label class="form-label">Tanggal Penagihan (Billing Date)</label>
@@ -129,11 +136,15 @@
             document.getElementById('lng').value = e.latlng.lng;
         });
 
-        // Paket selection logic
+        // Dynamic MikroTik profiles logic
+        const routerSelect = document.querySelector('select[name="id_router"]');
+        const typeSelect = document.querySelector('select[name="mikrotik_type"]');
         const paketSelect = document.getElementById('paket_select');
+        const paketDatalist = document.getElementById('paket_list');
         const hargaInput = document.getElementById('harga_layanan');
 
         const paketPrices = {
+            'umum': 100000,
             '100rb 3mb': 100000,
             '120rb 8mb': 120000,
             '130rb 12mb': 130000,
@@ -141,12 +152,67 @@
             '200rb 35mb': 200000
         };
 
-        paketSelect.addEventListener('change', function() {
+        const defaultOptions = `
+            <option value="umum">umum</option>
+            <option value="100rb 3mb">100rb 3mb</option>
+            <option value="120rb 8mb">120rb 8mb</option>
+            <option value="130rb 12mb">130rb 12mb</option>
+            <option value="150rb 20mb">150rb 20mb</option>
+            <option value="200rb 35mb">200rb 35mb</option>
+        `;
+
+        function guessPrice(profileName) {
+            const lower = profileName.toLowerCase();
+            if (lower === 'umum') return 100000;
+            if (lower.includes('100')) return 100000;
+            if (lower.includes('120')) return 120000;
+            if (lower.includes('130')) return 130000;
+            if (lower.includes('150')) return 150000;
+            if (lower.includes('200')) return 200000;
+            if (lower.includes('3mb') || lower.includes('3m')) return 100000;
+            if (lower.includes('8mb') || lower.includes('8m')) return 120000;
+            if (lower.includes('12mb') || lower.includes('12m')) return 130000;
+            if (lower.includes('20mb') || lower.includes('20m')) return 150000;
+            if (lower.includes('35mb') || lower.includes('35m')) return 200000;
+            return '';
+        }
+
+        function loadProfiles() {
+            const routerId = routerSelect.value;
+            const type = typeSelect.value;
+
+            if (!routerId || type === 'static') {
+                paketDatalist.innerHTML = defaultOptions;
+                return;
+            }
+
+            fetch(`/mikrotik/${routerId}/profiles/${type}`)
+                .then(response => response.json())
+                .then(profiles => {
+                    let html = '<option value="umum">umum</option>';
+                    profiles.forEach(p => {
+                        html += `<option value="${p}">${p}</option>`;
+                    });
+                    paketDatalist.innerHTML = html;
+                })
+                .catch(err => {
+                    console.error('Gagal memuat profil:', err);
+                    paketDatalist.innerHTML = defaultOptions;
+                });
+        }
+
+        routerSelect.addEventListener('change', loadProfiles);
+        typeSelect.addEventListener('change', loadProfiles);
+
+        paketSelect.addEventListener('input', function() {
             const selected = this.value;
             if (paketPrices[selected]) {
                 hargaInput.value = paketPrices[selected];
-            } else if (selected === 'custom') {
-                hargaInput.focus();
+            } else {
+                const guessed = guessPrice(selected);
+                if (guessed) {
+                    hargaInput.value = guessed;
+                }
             }
         });
     });

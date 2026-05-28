@@ -59,8 +59,8 @@ class WhatsappManagementController extends Controller
         }
 
         $botPath = base_path('whatsapp-bot');
-        // Force kill any existing node processes to prevent stale/ghost sessions
-        $command = "cmd /c \"taskkill /F /IM node.exe /T && cd /d $botPath && start /B node index.js > bot.log 2>&1\"";
+        // Force kill any existing node processes to prevent stale/ghost sessions. Use single ampersand so failure does not block the start command.
+        $command = "cmd /c \"taskkill /F /IM node.exe /T & cd /d $botPath & start /B node index.js > bot.log 2>&1\"";
         
         pclose(popen($command, "r"));
         

@@ -427,7 +427,57 @@ class MikrotikService
         }
     }
 
-    public function setSecretStatus(Router $router, $username, $type, $disable, $ip = null)
+    public function getAllActiveUsers(Router $router)
+    {
+        $activeUsers = [];
+        try {
+            $client = $this->getConnection($router);
+            if (!$client) return [];
+
+            // Fetch PPPoE active
+            $pppoeQuery = new Query('/ppp/active/print');
+            $pppoeQuery->equal('.proplist', '.id,name,address,uptime,caller-id');
+            $pppoeActive = $client->query($pppoeQuery)->read();
+            
+            if (is_array($pppoeActive)) {
+                foreach ($pppoeActive as $p) {
+                    if (isset($p['name'])) {
+                        $activeUsers[] = [
+                            'username' => $p['name'],
+                            'service' => 'PPPoE',
+                            'address' => $p['address'] ?? 'N/A',
+                            'uptime' => $p['uptime'] ?? 'N/A',
+                            'caller_id' => $p['caller-id'] ?? 'N/A',
+                        ];
+                    }
+                }
+            }
+
+            // Fetch Hotspot active
+            $hotspotQuery = new Query('/ip/hotspot/active/print');
+            $hotspotQuery->equal('.proplist', '.id,user,address,uptime,mac-address');
+            $hotspotActive = $client->query($hotspotQuery)->read();
+            
+            if (is_array($hotspotActive)) {
+                foreach ($hotspotActive as $h) {
+                    if (isset($h['user'])) {
+                        $activeUsers[] = [
+                            'username' => $h['user'],
+                            'service' => 'Hotspot',
+                            'address' => $h['address'] ?? 'N/A',
+                            'uptime' => $h['uptime'] ?? 'N/A',
+                            'caller_id' => $h['mac-address'] ?? 'N/A',
+                        ];
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::error("Mikrotik getAllActiveUsers error: " . $e->getMessage());
+        }
+        return $activeUsers;
+    }
+
+    public function setSecretStatus(Router $router, $username, $type, $disable, $ip = null, $profileName = null)
     {
         try {
             $client = $this->getConnection($router, 1, true);
@@ -438,14 +488,23 @@ class MikrotikService
 
             $found = false;
 
-            // 1. Update status secret (Enable/Disable)
+            // 1. Update status secret (Enable/Disable) & Profile
             if ($type === 'pppoe') {
                 $query = new Query('/ppp/secret/print');
                 $query->equal('name', $username);
                 $resp = $client->query($query)->read();
                 if (!empty($resp)) {
                     $id = $resp[0]['.id'];
-                    $client->query((new Query('/ppp/secret/set'))->equal('.id', $id)->equal('disabled', $disable ? 'yes' : 'no'))->read();
+                    $setQuery = (new Query('/ppp/secret/set'))
+                        ->equal('.id', $id)
+                        ->equal('disabled', $disable ? 'yes' : 'no');
+                    if ($profileName && $profileName !== 'custom') {
+                        $setQuery->equal('profile', $profileName);
+                    }
+                    if ($ip) {
+                        $setQuery->equal('remote-address', $ip);
+                    }
+                    $client->query($setQuery)->read();
                     
                     // Putuskan koneksi aktif agar modem/router langsung melakukan dial-in ulang secara fresh
                     $activeQuery = new Query('/ppp/active/print');
@@ -457,6 +516,19 @@ class MikrotikService
                         }
                     }
                     $found = true;
+                } else {
+                    // Auto-create PPPoE secret
+                    $addQuery = (new Query('/ppp/secret/add'))
+                        ->equal('name', $username)
+                        ->equal('password', '12345678')
+                        ->equal('service', 'pppoe')
+                        ->equal('profile', ($profileName && $profileName !== 'custom') ? $profileName : 'default')
+                        ->equal('disabled', $disable ? 'yes' : 'no');
+                    if ($ip) {
+                        $addQuery->equal('remote-address', $ip);
+                    }
+                    $client->query($addQuery)->read();
+                    $found = true;
                 }
             } elseif ($type === 'hotspot') {
                 $query = new Query('/ip/hotspot/user/print');
@@ -464,7 +536,13 @@ class MikrotikService
                 $resp = $client->query($query)->read();
                 if (!empty($resp)) {
                     $id = $resp[0]['.id'];
-                    $client->query((new Query('/ip/hotspot/user/set'))->equal('.id', $id)->equal('disabled', $disable ? 'yes' : 'no'))->read();
+                    $setQuery = (new Query('/ip/hotspot/user/set'))
+                        ->equal('.id', $id)
+                        ->equal('disabled', $disable ? 'yes' : 'no');
+                    if ($profileName && $profileName !== 'custom') {
+                        $setQuery->equal('profile', $profileName);
+                    }
+                    $client->query($setQuery)->read();
                     
                     // Putuskan sesi aktif agar pengguna dipaksa login ulang secara fresh
                     $activeQuery = new Query('/ip/hotspot/active/print');
@@ -476,6 +554,15 @@ class MikrotikService
                         }
                     }
                     $found = true;
+                } else {
+                    // Auto-create Hotspot user
+                    $addQuery = (new Query('/ip/hotspot/user/add'))
+                        ->equal('name', $username)
+                        ->equal('password', '12345678')
+                        ->equal('profile', ($profileName && $profileName !== 'custom') ? $profileName : 'default')
+                        ->equal('disabled', $disable ? 'yes' : 'no');
+                    $client->query($addQuery)->read();
+                    $found = true;
                 }
             } elseif ($type === 'static') {
                 // 1. Update Simple Queue (Limit Speed)
@@ -483,30 +570,77 @@ class MikrotikService
                 
                 if ($targetQueue) {
                     $id = $targetQueue['.id'];
-                    if ($disable) {
-                        // Cukup di-disable saja antreannya saat isolir (tanpa mengubah speed limit)
-                        $client->query((new Query('/queue/simple/set'))
-                            ->equal('.id', $id)
-                            ->equal('disabled', 'yes'))->read();
-                    } else {
-                        // Aktifkan kembali antrean saat pelanggan aktif
-                        $client->query((new Query('/queue/simple/set'))
-                            ->equal('.id', $id)
-                            ->equal('disabled', 'no'))->read();
+                    $setQuery = (new Query('/queue/simple/set'))
+                        ->equal('.id', $id)
+                        ->equal('disabled', $disable ? 'yes' : 'no');
+                    if ($profileName && $profileName !== 'custom') {
+                        $limit = null;
+                        if (preg_match('/(\d+)\s*(mb|m)/i', $profileName, $matches)) {
+                            $mb = $matches[1];
+                            $limit = "{$mb}M/{$mb}M";
+                        } elseif (preg_match('/(\d+)k/i', $profileName, $matches)) {
+                            $k = $matches[1];
+                            $limit = "{$k}k/{$k}k";
+                        }
+                        if ($limit) {
+                            $setQuery->equal('max-limit', $limit);
+                        }
                     }
+                    $client->query($setQuery)->read();
                     $found = true;
+                } else {
+                    // Auto-create Simple Queue if IP is provided
+                    if ($ip) {
+                        $limit = '10M/10M';
+                        if ($profileName && $profileName !== 'custom') {
+                            if (preg_match('/(\d+)\s*(mb|m)/i', $profileName, $matches)) {
+                                $mb = $matches[1];
+                                $limit = "{$mb}M/{$mb}M";
+                            } elseif (preg_match('/(\d+)k/i', $profileName, $matches)) {
+                                $k = $matches[1];
+                                $limit = "{$k}k/{$k}k";
+                            }
+                        }
+                        $addQuery = (new Query('/queue/simple/add'))
+                            ->equal('name', $username)
+                            ->equal('target', $ip)
+                            ->equal('max-limit', $limit)
+                            ->equal('disabled', $disable ? 'yes' : 'no');
+                        $client->query($addQuery)->read();
+                        $found = true;
+                    }
                 }
 
                 // 2. Update Address List (Block Traffic via Firewall)
                 if ($ip) {
                     $listName = 'ISOLIR';
+                    
+                    // Tarik semua entri di address-list untuk difilter secara andal di PHP
                     $addrQuery = new Query('/ip/firewall/address-list/print');
-                    $addrQuery->where('address', $ip);
-                    $addrQuery->where('list', $listName);
-                    $addrResp = $client->query($addrQuery)->read();
+                    $allAddrs = $client->query($addrQuery)->read();
+                    
+                    $matchedAddrs = [];
+                    if (is_array($allAddrs)) {
+                        foreach ($allAddrs as $addr) {
+                            $addrIp = $addr['address'] ?? '';
+                            $addrListName = $addr['list'] ?? '';
+                            $addrComment = $addr['comment'] ?? '';
+                            
+                            if ($addrListName === $listName) {
+                                // Pencocokan berdasarkan kesamaan IP (bisa dengan subnet /32) ATAU comment yang mengandung username
+                                $ipMatch = ($addrIp === $ip || $addrIp === $ip . '/32');
+                                $commentMatch = (strpos(strtolower($addrComment), strtolower($username)) !== false);
+                                
+                                if ($ipMatch || $commentMatch) {
+                                    $matchedAddrs[] = $addr;
+                                }
+                            }
+                        }
+                    }
                     
                     if ($disable) {
-                        if (empty($addrResp)) {
+                        // Jika isolir (block) and belum ada di list, buat baru
+                        if (empty($matchedAddrs)) {
                             $addQuery = (new Query('/ip/firewall/address-list/add'))
                                 ->equal('address', $ip)
                                 ->equal('list', $listName)
@@ -514,11 +648,14 @@ class MikrotikService
                             $client->query($addQuery)->read();
                         }
                     } else {
-                        if (!empty($addrResp)) {
-                            foreach ($addrResp as $addr) {
-                                $remQuery = (new Query('/ip/firewall/address-list/remove'))
-                                    ->equal('.id', $addr['.id']);
-                                $client->query($remQuery)->read();
+                        // Jika aktif (unblock), hapus SEMUA yang cocok dari list
+                        if (!empty($matchedAddrs)) {
+                            foreach ($matchedAddrs as $addr) {
+                                if (isset($addr['.id'])) {
+                                    $remQuery = (new Query('/ip/firewall/address-list/remove'))
+                                        ->equal('.id', $addr['.id']);
+                                    $client->query($remQuery)->read();
+                                }
                             }
                         }
                     }

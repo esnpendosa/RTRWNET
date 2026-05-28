@@ -151,6 +151,7 @@
 </div>
 
 @section('page-script')
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
 <script>
     function showQrModal(qrData) {
@@ -168,6 +169,36 @@
         modal.show();
     }
     document.addEventListener('DOMContentLoaded', function() {
+        const btnStartBot = document.getElementById('btnStartBot');
+        if (btnStartBot) {
+            btnStartBot.addEventListener('click', function() {
+                btnStartBot.disabled = true;
+                btnStartBot.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Menjalankan...';
+                
+                axios.post("{{ route('whatsapp.bot.start') }}")
+                    .then(res => {
+                        Swal.fire({
+                            icon: 'info',
+                            title: 'Memulai Server Bot...',
+                            text: res.data.message || 'Harap tunggu sekitar 10 detik lalu segarkan halaman.',
+                            timer: 5000,
+                            showConfirmButton: false
+                        }).then(() => {
+                            location.reload();
+                        });
+                    })
+                    .catch(err => {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Gagal Menjalankan Bot',
+                            text: err.response?.data?.message || 'Terjadi kesalahan sistem.'
+                        });
+                        btnStartBot.disabled = false;
+                        btnStartBot.innerHTML = '<i class="bx bx-play me-1"></i> Jalankan Server Bot';
+                    });
+            });
+        }
+
         const methodSelect = document.getElementById('connectMethod');
         const pairingSection = document.getElementById('pairingSection');
         const btnGenerate = document.getElementById('btnGenerate');

@@ -16,9 +16,34 @@ class TagihanController extends Controller
         $query = Tagihan::with('pelanggan');
 
         if ($search) {
-            $query->whereHas('pelanggan', function ($q) use ($search) {
-                $q->where('nama_pelanggan', 'like', "%{$search}%")
-                    ->orWhere('kode_pelanggan', 'like', "%{$search}%");
+            $query->where(function ($mainQuery) use ($search) {
+                $mainQuery->whereHas('pelanggan', function ($q) use ($search) {
+                    $q->where('nama_pelanggan', 'like', "%{$search}%")
+                      ->orWhere('kode_pelanggan', 'like', "%{$search}%")
+                      ->orWhere('no_wa', 'like', "%{$search}%")
+                      ->orWhere('mikrotik_username', 'like', "%{$search}%")
+                      ->orWhere('ip_address', 'like', "%{$search}%")
+                      ->orWhere('alamat', 'like', "%{$search}%");
+                });
+
+                $mainQuery->orWhere('status', 'like', "%{$search}%")
+                          ->orWhere('metode_pembayaran', 'like', "%{$search}%")
+                          ->orWhere('tahun', 'like', "%{$search}%");
+
+                // Mapping month names (both Indonesian and English) to integer values
+                $monthMap = [
+                    'jan' => 1, 'peb' => 2, 'feb' => 2, 'mar' => 3, 'apr' => 4,
+                    'mei' => 5, 'may' => 5, 'jun' => 6, 'jul' => 7, 'agu' => 8,
+                    'aug' => 8, 'sep' => 9, 'okt' => 10, 'oct' => 10, 'nov' => 11,
+                    'des' => 12, 'dec' => 12,
+                    'januari' => 1, 'februari' => 2, 'maret' => 3, 'april' => 4,
+                    'juni' => 6, 'juli' => 7, 'agustus' => 8, 'september' => 9,
+                    'oktober' => 10, 'november' => 11, 'desember' => 12
+                ];
+                $lowerSearch = strtolower($search);
+                if (isset($monthMap[$lowerSearch])) {
+                    $mainQuery->orWhere('bulan', $monthMap[$lowerSearch]);
+                }
             });
         }
 
@@ -49,6 +74,8 @@ class TagihanController extends Controller
         $tagihan->update([
             'jumlah' => $request->jumlah,
         ]);
+
+        \App\Helpers\ActivityLogger::log('Mengubah nominal tagihan #' . $tagihan->id_tagihan . ' untuk ' . ($tagihan->pelanggan ? $tagihan->pelanggan->nama_pelanggan : 'Umum') . ' menjadi Rp ' . number_format($request->jumlah, 0, ',', '.'), 'tagihan');
 
         return back()->with('success', 'Jumlah tagihan berhasil diperbarui.');
     }
@@ -81,7 +108,7 @@ class TagihanController extends Controller
             }
 
             // Kirim Nota
-            if ($pelanggan && $pelanggan->no_wa) {
+            if ($pelanggan && $pelanggan->no_wa && $pelanggan->wa_active && \App\Models\Setting::get('wa_billing_notification_enabled', '1') == '1') {
                 try {
                     $waClient = new \App\Services\WhatsappClient();
                     $waClient->sendReceipt($tagihan, true);
@@ -90,6 +117,8 @@ class TagihanController extends Controller
                 }
             }
         }
+
+        \App\Helpers\ActivityLogger::log('Mengubah data tagihan #' . $tagihan->id_tagihan . ' (' . ($tagihan->pelanggan ? $tagihan->pelanggan->nama_pelanggan : 'Umum') . ') menjadi status: ' . $tagihan->status, 'tagihan');
 
         return back()->with('success', 'Detail tagihan berhasil diperbarui.');
     }
@@ -189,10 +218,26 @@ class TagihanController extends Controller
 
         $query = Pelanggan::where('is_active', true);
 
-        if ($request->id_pelanggan) {
+        if ($request->mode === 'user') {
+            if (!$request->id_pelanggan) {
+                return back()->with('error', 'Gagal: Pelanggan belum dipilih.');
+            }
             $query->where('id_pelanggan', $request->id_pelanggan);
-        } elseif ($request->date_start && $request->date_end) {
-            $query->whereBetween('billing_date', [$request->date_start, $request->date_end]);
+        } elseif ($request->mode === 'range') {
+            if ($request->date_start && $request->date_end) {
+                $query->whereBetween('billing_date', [$request->date_start, $request->date_end]);
+            } else {
+                return back()->with('error', 'Gagal: Range tanggal jatuh tempo belum ditentukan.');
+            }
+        } else {
+            // Fallback for safety or legacy requests
+            if ($request->id_pelanggan) {
+                $query->where('id_pelanggan', $request->id_pelanggan);
+            } elseif ($request->date_start && $request->date_end) {
+                $query->whereBetween('billing_date', [$request->date_start, $request->date_end]);
+            } else {
+                return back()->with('error', 'Gagal: Parameter pembuatan tagihan tidak valid.');
+            }
         }
 
         $pelanggans = $query->get();
@@ -217,8 +262,8 @@ class TagihanController extends Controller
                 ]);
                 $generatedCount++;
 
-                // Kirim Notifikasi WA jika nomor WA ada
-                if ($p->no_wa) {
+                // Kirim Notifikasi WA jika nomor WA ada dan aktif secara global serta aktif per pelanggan
+                if ($p->no_wa && $p->wa_active && \App\Models\Setting::get('wa_billing_notification_enabled', '1') == '1') {
                     try {
                         $monthName = date('F', mktime(0, 0, 0, $currentMonth, 10));
                         $message = "🔔 *PEMBERITAHUAN TAGIHAN BARU*\n\n";
@@ -308,8 +353,8 @@ class TagihanController extends Controller
             }
         }
 
-        // Kirim Notifikasi WA jika nomor WA ada
-        if ($pelanggan && $pelanggan->no_wa) {
+        // Kirim Notifikasi WA jika nomor WA ada dan aktif secara global serta aktif per pelanggan
+        if ($pelanggan && $pelanggan->no_wa && $pelanggan->wa_active && \App\Models\Setting::get('wa_billing_notification_enabled', '1') == '1') {
             try {
                 $waClient = new \App\Services\WhatsappClient();
                 $waClient->sendReceipt($tagihan, true);
@@ -332,30 +377,49 @@ class TagihanController extends Controller
     {
         if (auth()->user()->id_role != 1) abort(403);
 
-        \App\Models\Setting::set('payment_gateway_enabled', $request->gateway_enabled ? '1' : '0', 'payment');
-        \App\Models\Setting::set('midtrans_merchant_id', trim($request->midtrans_merchant_id), 'payment');
-        \App\Models\Setting::set('midtrans_client_key', trim($request->midtrans_client_key), 'payment');
-        \App\Models\Setting::set('midtrans_server_key', trim($request->midtrans_server_key), 'payment');
-        \App\Models\Setting::set('midtrans_is_production', $request->midtrans_is_production ? '1' : '0', 'payment');
-        
-        \App\Models\Setting::set('payment_fee', $request->payment_fee ?? '0', 'payment');
+        // Form 1: Konfigurasi Metode Pembayaran
+        if ($request->has('midtrans_merchant_id') || $request->has('manual_methods') || $request->has('gateway_enabled') || $request->has('manual_enabled')) {
+            \App\Models\Setting::set('payment_gateway_enabled', $request->has('gateway_enabled') ? '1' : '0', 'payment');
+            \App\Models\Setting::set('midtrans_merchant_id', trim($request->midtrans_merchant_id), 'payment');
+            \App\Models\Setting::set('midtrans_client_key', trim($request->midtrans_client_key), 'payment');
+            \App\Models\Setting::set('midtrans_server_key', trim($request->midtrans_server_key), 'payment');
+            \App\Models\Setting::set('midtrans_is_production', $request->has('midtrans_is_production') ? '1' : '0', 'payment');
+            \App\Models\Setting::set('payment_fee', $request->payment_fee ?? '0', 'payment');
+            \App\Models\Setting::set('manual_payment_enabled', $request->has('manual_enabled') ? '1' : '0', 'payment');
+            \App\Models\Setting::set('manual_payment_methods', $request->manual_methods, 'payment');
+            \App\Models\Setting::set('manual_bank_info', $request->bank_info, 'payment');
+        }
 
-        \App\Models\Setting::set('manual_payment_enabled', $request->manual_enabled ? '1' : '0', 'payment');
-        \App\Models\Setting::set('manual_payment_methods', $request->manual_methods, 'payment');
-        \App\Models\Setting::set('manual_bank_info', $request->bank_info, 'payment');
+        // Form 2: Otomatisasi Tagihan & Isolir
+        if ($request->has('billing_generate_date') || $request->has('billing_isolir_date')) {
+            \App\Models\Setting::set('billing_auto_generate_enabled', $request->has('auto_generate_enabled') ? '1' : '0', 'automation');
+            \App\Models\Setting::set('billing_generate_date', $request->billing_generate_date ?? '1', 'automation');
+            \App\Models\Setting::set('billing_start_date', $request->billing_start_date ?? '1', 'automation');
+            \App\Models\Setting::set('billing_isolir_date', $request->billing_isolir_date ?? '10', 'automation');
+            \App\Models\Setting::set('billing_isolir_hour', $request->billing_isolir_hour ?? '12', 'automation');
+            \App\Models\Setting::set('billing_auto_isolir_enabled', $request->has('auto_isolir_enabled') ? '1' : '0', 'automation');
+            \App\Models\Setting::set('billing_reminder_enabled', $request->has('reminder_enabled') ? '1' : '0', 'automation');
+            \App\Models\Setting::set('billing_reminder_date', $request->billing_reminder_date ?? '5', 'automation');
+        }
 
-        // New Automation Settings
-        \App\Models\Setting::set('billing_auto_generate_enabled', $request->auto_generate_enabled ? '1' : '0', 'automation');
-        \App\Models\Setting::set('billing_generate_date', $request->billing_generate_date ?? '1', 'automation');
-        \App\Models\Setting::set('billing_start_date', $request->billing_start_date ?? '1', 'automation');
-        \App\Models\Setting::set('billing_isolir_date', $request->billing_isolir_date ?? '10', 'automation');
-        \App\Models\Setting::set('billing_isolir_hour', $request->billing_isolir_hour ?? '12', 'automation');
-        \App\Models\Setting::set('billing_auto_isolir_enabled', $request->auto_isolir_enabled ? '1' : '0', 'automation');
-        
-        \App\Models\Setting::set('billing_reminder_enabled', $request->reminder_enabled ? '1' : '0', 'automation');
-        \App\Models\Setting::set('billing_reminder_date', $request->billing_reminder_date ?? '5', 'automation');
+        // Form 3: Manajemen Notifikasi WhatsApp (Global)
+        if ($request->has('wa_billing_switch_present')) {
+            \App\Models\Setting::set('wa_billing_notification_enabled', $request->has('wa_billing_notification_enabled') ? '1' : '0', 'automation');
+        }
 
         return back()->with('success', 'Pengaturan pembayaran dan otomatisasi berhasil diperbarui.');
+    }
+
+    public function clearAllPhoneNumbers()
+    {
+        if (auth()->user()->id_role != 1) abort(403);
+
+        try {
+            \App\Models\Pelanggan::query()->update(['no_wa' => null]);
+            return back()->with('success', 'Semua nomor HP pelanggan berhasil dimatikan/dikosongkan secara massal.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Gagal mematikan nomor HP pelanggan: ' . $e->getMessage());
+        }
     }
 
     public function downloadReceipt(Tagihan $tagihan)
@@ -396,8 +460,8 @@ class TagihanController extends Controller
             }
         }
 
-        // Kirim Notifikasi WA Kwitansi Lunas
-        if ($pelanggan && $pelanggan->no_wa) {
+        // Kirim Notifikasi WA Kwitansi Lunas jika aktif secara global serta aktif per pelanggan
+        if ($pelanggan && $pelanggan->no_wa && $pelanggan->wa_active && \App\Models\Setting::get('wa_billing_notification_enabled', '1') == '1') {
             try {
                 $waClient = new \App\Services\WhatsappClient();
                 $waClient->sendReceipt($tagihan, true);
@@ -405,6 +469,8 @@ class TagihanController extends Controller
                 \Illuminate\Support\Facades\Log::error('Gagal kirim notifikasi WA Cash: ' . $e->getMessage());
             }
         }
+
+        \App\Helpers\ActivityLogger::log('Mengonfirmasi pembayaran Cash untuk tagihan #' . $tagihan->id_tagihan . ' (' . ($tagihan->pelanggan ? $tagihan->pelanggan->nama_pelanggan : 'Umum') . ') sebesar Rp ' . number_format($tagihan->jumlah, 0, ',', '.'), 'tagihan');
 
         return back()->with('success', 'Pembayaran Cash berhasil dikonfirmasi, WiFi diaktifkan, dan struk terkirim otomatis ke WhatsApp pelanggan!');
     }

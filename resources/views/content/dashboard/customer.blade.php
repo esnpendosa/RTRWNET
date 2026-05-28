@@ -204,7 +204,7 @@
                             </div>
                         </div>
                         <div class="card-footer-id">
-                            <img src="https://barcode.tec-it.com/barcode.ashx?data={{ $pelanggan->kode_pelanggan }}&code=Code128&translate-esc=on" style="height: 20px; opacity: 0.6;" alt="Barcode">
+                            <svg id="barcode-{{ $pelanggan->kode_pelanggan }}" style="height: 25px; max-width: 120px; opacity: 0.8;"></svg>
                             <small class="text-muted" style="font-size: 9px;">rozitech.co.id</small>
                         </div>
                     </div>
@@ -260,9 +260,26 @@
                         </tr>
                         @endforelse
                     </tbody>
-                </table>
             </div>
         </div>
     </div>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        try {
+            JsBarcode("#barcode-{{ $pelanggan->kode_pelanggan }}", "{{ $pelanggan->kode_pelanggan }}", {
+                format: "CODE128",
+                lineColor: "#000",
+                width: 1.5,
+                height: 30,
+                displayValue: false,
+                margin: 0
+            });
+        } catch(e) {
+            console.error("Gagal membuat barcode:", e);
+        }
+    });
+</script>
 @endsection

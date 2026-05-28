@@ -25,6 +25,13 @@
       "permission": "pelanggan_manage"
     },
     {
+      "url": "/registrasi",
+      "name": "Registrasi Baru",
+      "icon": "menu-icon icon-base bx bx-user-plus",
+      "slug": "registrasi",
+      "permission": "pelanggan_manage"
+    },
+    {
       "url": "/map-pelanggan",
       "name": "Web GIS Pelanggan",
       "icon": "menu-icon icon-base bx bx-map-alt",
@@ -86,6 +93,13 @@
       "icon": "menu-icon icon-base bx bx-wrench",
       "slug": "inventory",
       "permission": "inventory_manage"
+    },
+    {
+      "url": "/kas-bon",
+      "name": "Kas Bon Pekerja",
+      "icon": "menu-icon icon-base bx bx-money",
+      "slug": "kas-bon",
+      "permission": "user_manage"
     },
     {
       "menuHeader": "Keuangan"

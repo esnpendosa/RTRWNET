@@ -24,7 +24,7 @@ class RuteController extends Controller
     {
         $rute = Rute::with('teknisi')->latest()->get();
         $teknisi = Teknisi::where('is_active', true)->get();
-        $pelangganHigh = Pelanggan::whereIn('prioritas_label', ['High', 'Medium'])->get();
+        $pelangganHigh = Pelanggan::whereIn('prioritas_label', ['HIGH', 'MEDIUM', 'High', 'Medium', 'Sangat Prioritas', 'Prioritas'])->get();
         
         return view('content.rute.index', compact('rute', 'teknisi', 'pelangganHigh'));
     }

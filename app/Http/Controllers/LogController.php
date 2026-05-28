@@ -7,9 +7,26 @@ use Illuminate\Support\Facades\File;
 
 class LogController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        return view('content.system.logs');
+        $activitiesQuery = \App\Models\AktivitasUser::with('user')->latest();
+
+        if ($request->filled('type')) {
+            $activitiesQuery->where('tipe', $request->input('type'));
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $activitiesQuery->where(function($q) use ($search) {
+                $q->where('nama_user', 'like', "%{$search}%")
+                  ->orWhere('aktivitas', 'like', "%{$search}%")
+                  ->orWhere('role', 'like', "%{$search}%");
+            });
+        }
+
+        $activities = $activitiesQuery->paginate(30);
+
+        return view('content.system.logs', compact('activities'));
     }
 
     public function fetch(Request $request)

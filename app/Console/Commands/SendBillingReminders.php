@@ -28,6 +28,12 @@ class SendBillingReminders extends Command
      */
     public function handle()
     {
+        $globalEnabled = Setting::get('wa_billing_notification_enabled', '1');
+        if ($globalEnabled != '1') {
+            $this->info('WhatsApp billing notifications are globally disabled. Skipping reminders.');
+            return;
+        }
+
         $enabled = Setting::get('billing_reminder_enabled', '1');
         if ($enabled != '1') {
             $this->info('Billing reminder is disabled in settings.');
@@ -61,7 +67,7 @@ class SendBillingReminders extends Command
         $sentCount = 0;
 
         foreach ($unpaidPelanggan as $p) {
-            if ($p->no_wa && $p->tagihan->count() > 0) {
+            if ($p->no_wa && $p->wa_active && $p->tagihan->count() > 0) {
                 $tagihan = $p->tagihan->first();
                 $monthName = date('F', mktime(0, 0, 0, $currentMonth, 10));
                 

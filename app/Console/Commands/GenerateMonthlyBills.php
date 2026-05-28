@@ -63,7 +63,7 @@ class GenerateMonthlyBills extends Command
                 $generatedCount++;
 
                 // Kirim Notifikasi WA
-                if ($p->no_wa) {
+                if ($p->no_wa && $p->wa_active && \App\Models\Setting::get('wa_billing_notification_enabled', '1') == '1') {
                     $monthName = date('F', mktime(0, 0, 0, $currentMonth, 10));
                     $message = "🔔 *PEMBERITAHUAN TAGIHAN BARU*\n\n";
                     $message .= "Halo " . $p->nama_pelanggan . ",\n";

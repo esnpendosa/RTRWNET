@@ -24,6 +24,27 @@
       <a href="{{ route('pelanggan.card-massal', ['search' => request('search')]) }}" class="btn btn-outline-info btn-sm me-1" target="_blank">
         <i class="bx bx-id-card me-1"></i> Cetak Kartu
       </a>
+      <div class="dropdown me-1">
+        <button class="btn btn-outline-success btn-sm dropdown-toggle" type="button" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+          <i class="bx bxl-whatsapp me-1"></i> WA Massal
+        </button>
+        <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
+          <form action="{{ route('pelanggan.toggle-all-wa') }}" method="POST" onsubmit="return confirm('Apakah Anda yakin ingin MENGAKTIFKAN notifikasi WhatsApp untuk semua pelanggan?')">
+            @csrf
+            <input type="hidden" name="status" value="1">
+            <button type="submit" class="dropdown-item text-success">
+              <i class="bx bx-check-circle me-1"></i> Aktifkan Semua WA
+            </button>
+          </form>
+          <form action="{{ route('pelanggan.toggle-all-wa') }}" method="POST" onsubmit="return confirm('Apakah Anda yakin ingin MENONAKTIFKAN notifikasi WhatsApp untuk semua pelanggan?')">
+            @csrf
+            <input type="hidden" name="status" value="0">
+            <button type="submit" class="dropdown-item text-danger">
+              <i class="bx bx-x-circle me-1"></i> Nonaktifkan Semua WA
+            </button>
+          </form>
+        </div>
+      </div>
       <a href="{{ route('pelanggan.create') }}" class="btn btn-primary btn-sm">
         <i class="bx bx-plus me-1"></i> Tambah
       </a>
@@ -38,8 +59,9 @@
           <th>Alamat</th>
           <th>Usage (GB)</th>
           <th>Devices</th>
-          <th>Paket</th>
+          <th>Paket maks</th>
           <th>Status</th>
+          <th>WA</th>
           <th>Prioritas</th>
           <th>Aksi</th>
         </tr>
@@ -62,6 +84,14 @@
             </form>
           </td>
           <td>
+            <form action="{{ route('pelanggan.toggle-wa', $p->id_pelanggan) }}" method="POST" class="d-inline">
+              @csrf
+              <div class="form-check form-switch d-inline-block">
+                <input class="form-check-input" type="checkbox" role="switch" onchange="this.form.submit()" style="cursor: pointer; width: 2.5em; height: 1.25em; {{ $p->wa_active ? 'background-color: #25d366; border-color: #25d366;' : '' }}" {{ $p->wa_active ? 'checked' : '' }} title="{{ $p->wa_active ? 'Klik untuk Matikan WA' : 'Klik untuk Aktifkan WA' }}">
+              </div>
+            </form>
+          </td>
+          <td>
             @php
               $badge = ($p->prioritas_label == 'High' || $p->prioritas_label == 'Medium') ? 'bg-label-danger' : 'bg-label-success';
             @endphp
@@ -75,6 +105,13 @@
                     <i class="bx bx-id-card me-1"></i> Cetak Kartu
                 </a>
                 <a class="dropdown-item" href="{{ route('pelanggan.edit', $p->id_pelanggan) }}"><i class="bx bx-edit-alt me-1"></i> Edit</a>
+
+                <form action="{{ route('pelanggan.toggle-wa', $p->id_pelanggan) }}" method="POST">
+                    @csrf
+                    <button type="submit" class="dropdown-item">
+                        <i class="bx bxl-whatsapp me-1 text-success"></i> {{ $p->wa_active ? 'Matikan WA' : 'Aktifkan WA' }}
+                    </button>
+                </form>
 
                 <form action="{{ route('pelanggan.toggle-status', $p->id_pelanggan) }}" method="POST">
                     @csrf

@@ -54,6 +54,7 @@ class PelangganController extends Controller
             'harga_layanan' => 'required|numeric',
             'ip_address' => 'nullable|string',
             'billing_date' => 'required|integer|min:1|max:28',
+            'wa_active' => 'required|boolean',
         ]);
 
         $pelanggan = Pelanggan::create($validated);
@@ -77,8 +78,10 @@ class PelangganController extends Controller
         if ($pelanggan->id_router) {
             $mikrotik = app(MikrotikService::class);
             $username = $pelanggan->mikrotik_username ?: $pelanggan->kode_pelanggan;
-            $mikrotik->setSecretStatus($pelanggan->router, $username, $pelanggan->mikrotik_type, !$pelanggan->is_active, $pelanggan->ip_address);
+            $mikrotik->setSecretStatus($pelanggan->router, $username, $pelanggan->mikrotik_type, !$pelanggan->is_active, $pelanggan->ip_address, $pelanggan->paket);
         }
+
+        \App\Helpers\ActivityLogger::log('Menambahkan pelanggan baru: ' . $pelanggan->nama_pelanggan . ' (' . $pelanggan->kode_pelanggan . ')', 'pelanggan');
 
         return redirect()->route('pelanggan.index')->with('success', 'Pelanggan berhasil ditambahkan');
     }
@@ -107,6 +110,7 @@ class PelangganController extends Controller
             'harga_layanan' => 'required|numeric',
             'ip_address' => 'nullable|string',
             'is_active' => 'required|boolean',
+            'wa_active' => 'required|boolean',
             'billing_date' => 'required|integer|min:1|max:28',
         ]);
 
@@ -124,14 +128,17 @@ class PelangganController extends Controller
         if ($pelanggan->id_router) {
             $mikrotik = app(MikrotikService::class);
             $username = $pelanggan->mikrotik_username ?: $pelanggan->kode_pelanggan;
-            $mikrotik->setSecretStatus($pelanggan->router, $username, $pelanggan->mikrotik_type, !$pelanggan->is_active, $pelanggan->ip_address);
+            $mikrotik->setSecretStatus($pelanggan->router, $username, $pelanggan->mikrotik_type, !$pelanggan->is_active, $pelanggan->ip_address, $pelanggan->paket);
         }
+
+        \App\Helpers\ActivityLogger::log('Mengubah data pelanggan: ' . $pelanggan->nama_pelanggan . ' (' . $pelanggan->kode_pelanggan . ')', 'pelanggan');
 
         return redirect()->route('pelanggan.index')->with('success', 'Pelanggan berhasil diupdate');
     }
 
     public function destroy(Pelanggan $pelanggan)
     {
+        \App\Helpers\ActivityLogger::log('Menghapus pelanggan: ' . $pelanggan->nama_pelanggan . ' (' . $pelanggan->kode_pelanggan . ')', 'pelanggan');
         $pelanggan->delete();
         return redirect()->route('pelanggan.index')->with('success', 'Pelanggan berhasil dihapus');
     }
@@ -419,5 +426,77 @@ class PelangganController extends Controller
         }
 
         return back()->with('success', $imported . ' data pelanggan berhasil diimport dengan data lengkap');
+    }
+
+    public function toggleWa(Pelanggan $pelanggan)
+    {
+        $newStatus = $pelanggan->wa_active ? 0 : 1;
+        $pelanggan->update(['wa_active' => $newStatus]);
+
+        return back()->with('success', 'Status WhatsApp pelanggan ' . $pelanggan->nama_pelanggan . ($newStatus ? ' diaktifkan' : ' dinonaktifkan'));
+    }
+
+    public function toggleAllWa(Request $request)
+    {
+        $status = $request->input('status') == 1 ? 1 : 0;
+        Pelanggan::query()->update(['wa_active' => $status]);
+
+        \App\Helpers\ActivityLogger::log('Mengubah status WhatsApp pelanggan secara massal menjadi: ' . ($status ? 'Aktif' : 'Nonaktif'), 'pelanggan');
+
+        return back()->with('success', 'Status WhatsApp semua pelanggan berhasil di' . ($status ? 'aktifkan' : 'nonaktifkan'));
+    }
+
+    public function registrasiIndex(Request $request)
+    {
+        $search = $request->query('search');
+        $query = Pelanggan::where('kode_pelanggan', 'like', 'REG%')->latest();
+
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('nama_pelanggan', 'like', "%{$search}%")
+                    ->orWhere('kode_pelanggan', 'like', "%{$search}%")
+                    ->orWhere('alamat', 'like', "%{$search}%");
+            });
+        }
+
+        $registrations = $query->get();
+        return view('content.pelanggan.registrasi', compact('registrations'));
+    }
+
+    public function sendRegistrasiToGroup(Pelanggan $pelanggan)
+    {
+        try {
+            $whatsapp = app(\App\Services\WhatsappClient::class);
+            $adminNum = env('WHATSAPP_ADMIN_NUMBER');
+            
+            if (!$adminNum) {
+                return back()->with('error', 'Nomor/Grup WA Admin belum dikonfigurasi di file .env');
+            }
+
+            $targetJid = str_contains($adminNum, '@') ? $adminNum : $adminNum . "@s.whatsapp.net";
+            
+            $msg = "🔔 *RE-SEND REGISTRASI WIFI BARU*\n";
+            $msg .= "--------------------------\n";
+            $msg .= "Kode: " . $pelanggan->kode_pelanggan . "\n";
+            $msg .= "Nama: " . $pelanggan->nama_pelanggan . "\n";
+            $msg .= "No. WA: " . $pelanggan->no_wa . "\n";
+            $msg .= "Alamat: " . $pelanggan->alamat . "\n";
+            $msg .= "Paket: " . $pelanggan->paket . "\n";
+            if ($pelanggan->latitude && $pelanggan->longitude) {
+                $msg .= "Lokasi: https://www.google.com/maps?q=" . $pelanggan->latitude . "," . $pelanggan->longitude . "\n";
+            }
+            $msg .= "--------------------------\n";
+            $msg .= "Dikirim ulang oleh Admin untuk segera ditindaklanjuti!";
+
+            $sent = $whatsapp->sendMessage($targetJid, ['text' => $msg]);
+
+            if ($sent) {
+                return back()->with('success', 'Data pendaftaran ' . $pelanggan->nama_pelanggan . ' berhasil dikirim ke grup WhatsApp!');
+            } else {
+                return back()->with('error', 'Gagal mengirim pesan WhatsApp. Pastikan sesi bot aktif.');
+            }
+        } catch (\Exception $e) {
+            return back()->with('error', 'Terjadi kesalahan: ' . $e->getMessage());
+        }
     }
 }

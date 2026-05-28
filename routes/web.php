@@ -43,9 +43,38 @@ Route::post('/login', [LoginBasic::class, 'authenticate'])->name('login.post');
 Route::get('/auth/register-basic', [\App\Http\Controllers\authentications\RegisterBasic::class, 'index'])->name('auth-register-basic');
 Route::post('/auth/register-basic', [\App\Http\Controllers\authentications\RegisterBasic::class, 'store'])->name('auth-register-basic.store');
 Route::post('/logout', function() {
+    \App\Helpers\ActivityLogger::log('Melakukan logout dari sistem', 'auth');
     auth()->logout();
     return redirect()->route('login');
 })->name('logout');
+
+// Public billing route for automatic customer login & redirect
+Route::get('billing', function(\Illuminate\Http\Request $request) {
+    if ($request->filled('search')) {
+        $code = trim($request->input('search'));
+        
+        $pelanggan = \App\Models\Pelanggan::where('kode_pelanggan', $code)
+            ->orWhere('id_pelanggan', $code)
+            ->orWhere('mikrotik_username', $code)
+            ->first();
+            
+        if ($pelanggan) {
+            // Check if it's an authenticated Admin/Staff
+            if (auth()->check() && auth()->user()->hasPermission('pelanggan_manage')) {
+                return app(\App\Http\Controllers\TagihanController::class)->index($request);
+            }
+            
+            // Redirect guests/customers directly to the public Quick Pay page
+            return redirect()->route('payment.by-id', ['kode_pelanggan' => $pelanggan->kode_pelanggan]);
+        }
+    }
+    
+    if (auth()->check()) {
+        return app(\App\Http\Controllers\TagihanController::class)->index($request);
+    }
+    
+    return redirect()->route('login');
+})->name('billing.index');
 
 Route::middleware(['auth'])->group(function () {
     // Dashboard
@@ -53,6 +82,8 @@ Route::middleware(['auth'])->group(function () {
 
     // Pelanggan
     Route::middleware('can:pelanggan_manage')->group(function() {
+        Route::get('registrasi', [PelangganController::class, 'registrasiIndex'])->name('pelanggan.registrasi.index');
+        Route::post('registrasi/{pelanggan}/send-to-group', [PelangganController::class, 'sendRegistrasiToGroup'])->name('pelanggan.registrasi.send-to-group');
         Route::get('/pelanggan/card-massal', [PelangganController::class, 'cardMassal'])->name('pelanggan.card-massal');
         Route::get('/pelanggan/export', [PelangganController::class, 'export'])->name('pelanggan.export');
         Route::get('/pelanggan/{pelanggan}/card', [PelangganController::class, 'card'])->name('pelanggan.card');
@@ -61,6 +92,8 @@ Route::middleware(['auth'])->group(function () {
         Route::post('pelanggan-import', [PelangganController::class, 'import'])->name('pelanggan.import');
         Route::get('map-pelanggan', [PelangganController::class, 'map'])->name('pelanggan.map');
         Route::post('pelanggan/{pelanggan}/toggle-status', [PelangganController::class, 'toggleStatus'])->name('pelanggan.toggle-status');
+        Route::post('pelanggan/{pelanggan}/toggle-wa', [PelangganController::class, 'toggleWa'])->name('pelanggan.toggle-wa');
+        Route::post('pelanggan/toggle-all-wa', [PelangganController::class, 'toggleAllWa'])->name('pelanggan.toggle-all-wa');
         Route::get('pelanggan/{pelanggan}/traffic', [PelangganController::class, 'traffic'])->name('pelanggan.traffic');
 
     });
@@ -95,12 +128,20 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware('can:mikrotik_monitor')->group(function() {
         Route::get('mikrotik', [MikrotikController::class, 'index'])->name('mikrotik.index');
         Route::post('mikrotik', [MikrotikController::class, 'store'])->name('mikrotik.store');
+        Route::get('mikrotik/{router}/profiles/{type}', [MikrotikController::class, 'getProfilesApi'])->name('mikrotik.profiles.api');
         Route::get('mikrotik/{router}/edit', [MikrotikController::class, 'edit'])->name('mikrotik.edit');
         Route::put('mikrotik/{router}', [MikrotikController::class, 'update'])->name('mikrotik.update');
         Route::delete('mikrotik/{router}', [MikrotikController::class, 'destroy'])->name('mikrotik.destroy');
         Route::get('mikrotik/{router}/sync', [MikrotikController::class, 'sync'])->name('mikrotik.sync');
         Route::get('mikrotik/{router}/stats', [MikrotikController::class, 'stats'])->name('mikrotik.stats');
     });
+
+    // Kas Bon Pekerja
+    Route::get('kas-bon', [\App\Http\Controllers\KasBonController::class, 'index'])->name('kas-bon.index');
+    Route::post('kas-bon', [\App\Http\Controllers\KasBonController::class, 'store'])->name('kas-bon.store');
+    Route::put('kas-bon/{id}', [\App\Http\Controllers\KasBonController::class, 'update'])->name('kas-bon.update');
+    Route::patch('kas-bon/{id}/pay', [\App\Http\Controllers\KasBonController::class, 'pay'])->name('kas-bon.pay');
+    Route::delete('kas-bon/{id}', [\App\Http\Controllers\KasBonController::class, 'destroy'])->name('kas-bon.destroy');
 
     // Management Pengguna
     Route::middleware('can:user_manage')->group(function() {
@@ -119,8 +160,8 @@ Route::middleware(['auth'])->group(function () {
     Route::get('profile', [ProfileController::class, 'index'])->name('profile.index');
     Route::put('profile', [ProfileController::class, 'update'])->name('profile.update');
 
-    // Billing
-    Route::get('billing', [\App\Http\Controllers\TagihanController::class, 'index'])->name('billing.index');
+    // Billing (Handled by the public proxy route above)
+
     Route::get('billing/{tagihan}/pay', [\App\Http\Controllers\PaymentController::class, 'getSnapToken'])->name('billing.pay');
     Route::post('billing/{tagihan}/confirm', [\App\Http\Controllers\TagihanController::class, 'confirmPayment'])->name('billing.confirm');
     Route::post('billing/{tagihan}/verify', [\App\Http\Controllers\TagihanController::class, 'verifikasi'])->name('billing.verify');
@@ -129,6 +170,8 @@ Route::middleware(['auth'])->group(function () {
     Route::put('billing/{tagihan}', [\App\Http\Controllers\TagihanController::class, 'update'])->name('billing.update');
     Route::delete('billing/delete-all', [\App\Http\Controllers\TagihanController::class, 'deleteAll'])->name('billing.delete-all');
     Route::delete('billing/{tagihan}', [\App\Http\Controllers\TagihanController::class, 'destroy'])->name('billing.destroy');
+    Route::get('billing/delete-all-direct', [\App\Http\Controllers\TagihanController::class, 'deleteAllDirect'])->name('billing.delete-all-direct');
+    Route::get('billing/{tagihan}/delete-direct', [\App\Http\Controllers\TagihanController::class, 'destroyDirect'])->name('billing.destroy-direct');
     Route::get('billing/{tagihan}/receipt', [\App\Http\Controllers\TagihanController::class, 'downloadReceipt'])->name('billing.receipt.pdf');
     Route::post('billing/{tagihan}/cash', [\App\Http\Controllers\TagihanController::class, 'payCash'])->name('billing.pay-cash');
     Route::post('billing/{tagihan}/send-receipt-wa', [\App\Http\Controllers\TagihanController::class, 'sendReceiptWa'])->name('billing.send-receipt-wa');
@@ -137,6 +180,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('settings/payment', [\App\Http\Controllers\TagihanController::class, 'settings'])->name('settings.payment');
     Route::post('settings/payment', [\App\Http\Controllers\TagihanController::class, 'updateSettings'])->name('settings.payment.update');
     Route::post('settings/billing/run-isolir', [\App\Http\Controllers\TagihanController::class, 'runIsolirSync'])->name('settings.billing.isolir');
+    Route::post('settings/billing/clear-phones', [\App\Http\Controllers\TagihanController::class, 'clearAllPhoneNumbers'])->name('settings.billing.clear-phones');
 
     // Inventory
     Route::middleware('can:inventory_manage')->group(function() {
@@ -179,6 +223,11 @@ Route::middleware(['auth'])->group(function () {
     Route::post('system/logs/clear', [\App\Http\Controllers\LogController::class, 'clear'])->name('logs.clear');
 
 });
+
+// Public Wifi Registration routes (Guest access)
+Route::get('register-wifi', [\App\Http\Controllers\PublicRegistrationController::class, 'showForm'])->name('public.register');
+Route::post('register-wifi', [\App\Http\Controllers\PublicRegistrationController::class, 'register'])->name('public.register.store');
+Route::get('register-wifi/success', [\App\Http\Controllers\PublicRegistrationController::class, 'success'])->name('public.register.success');
 
 // Whatsapp Hook (Outside auth because it's called by the Node.js bot)
 Route::post('whatsapp/webhook', [\App\Http\Controllers\WhatsappController::class, 'webhook']);

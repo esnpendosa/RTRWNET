@@ -91,4 +91,40 @@ class MikrotikController extends Controller
         $stats = RouterStat::where('id_router', $router->id_router)->latest('recorded_at')->take(20)->get();
         return view('content.mikrotik.stats', compact('router', 'stats'));
     }
+
+    public function getProfilesApi(Router $router, $type)
+    {
+        $profiles = $this->mikrotikService->getProfiles($router, $type);
+        
+        $names = [];
+        if (is_array($profiles)) {
+            foreach ($profiles as $p) {
+                if (isset($p['name'])) {
+                    $names[] = $p['name'];
+                }
+            }
+        }
+        
+        return response()->json($names);
+    }
+
+    public function activeUsers(Request $request)
+    {
+        $routers = Router::all();
+        $selectedRouterId = $request->query('id_router');
+        $activeUsers = [];
+        
+        $selectedRouter = null;
+        if ($selectedRouterId) {
+            $selectedRouter = Router::find($selectedRouterId);
+        } elseif ($routers->isNotEmpty()) {
+            $selectedRouter = $routers->first();
+        }
+        
+        if ($selectedRouter) {
+            $activeUsers = $this->mikrotikService->getAllActiveUsers($selectedRouter);
+        }
+        
+        return view('content.mikrotik.active-users', compact('routers', 'selectedRouter', 'activeUsers'));
+    }
 }

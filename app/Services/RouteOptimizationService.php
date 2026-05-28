@@ -24,10 +24,10 @@ class RouteOptimizationService
      */
     private function getPriorityLevel($label)
     {
-        $label = strtolower($label);
-        if ($label === 'high') return 1;
-        if ($label === 'medium') return 2;
-        if ($label === 'low') return 3;
+        $label = strtolower(trim($label));
+        if ($label === 'high' || $label === 'sangat prioritas') return 1;
+        if ($label === 'medium' || $label === 'prioritas') return 2;
+        if ($label === 'low' || $label === 'tidak prioritas') return 3;
         return 4;
     }
 

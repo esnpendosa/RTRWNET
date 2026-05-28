@@ -21,6 +21,7 @@ class LoginBasic extends Controller
 
     if (auth()->attempt($credentials)) {
       $request->session()->regenerate();
+      \App\Helpers\ActivityLogger::log('Melakukan login ke sistem', 'auth');
       return redirect()->intended('/');
     }
 
