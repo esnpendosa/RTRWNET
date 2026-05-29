@@ -55,8 +55,28 @@ class PelangganController extends Controller
             'ip_address' => 'nullable|string',
             'billing_date' => 'required|integer|min:1|max:28',
             'wa_active' => 'required|boolean',
+            'foto_rumah' => 'nullable|file|max:5120',
         ]);
 
+        $fotoPath = null;
+        if ($request->hasFile('foto_rumah')) {
+            $file = $request->file('foto_rumah');
+            $extension = strtolower($file->getClientOriginalExtension());
+            $allowedExtensions = ['jpeg', 'png', 'jpg', 'gif'];
+            if (in_array($extension, $allowedExtensions)) {
+                $filename = time() . '_' . uniqid() . '.' . $extension;
+                $targetDir = storage_path('app/public/foto_rumah');
+                if (!file_exists($targetDir)) {
+                    @mkdir($targetDir, 0755, true);
+                    @chmod($targetDir, 0755);
+                }
+                $file->move($targetDir, $filename);
+                @chmod($targetDir . '/' . $filename, 0644);
+                $fotoPath = 'foto_rumah/' . $filename;
+            }
+        }
+
+        $validated['foto_rumah'] = $fotoPath;
         $pelanggan = Pelanggan::create($validated);
 
         // Auto-create User account
@@ -112,7 +132,33 @@ class PelangganController extends Controller
             'is_active' => 'required|boolean',
             'wa_active' => 'required|boolean',
             'billing_date' => 'required|integer|min:1|max:28',
+            'foto_rumah' => 'nullable|file|max:5120',
         ]);
+
+        if ($request->hasFile('foto_rumah')) {
+            $file = $request->file('foto_rumah');
+            $extension = strtolower($file->getClientOriginalExtension());
+            $allowedExtensions = ['jpeg', 'png', 'jpg', 'gif'];
+            if (in_array($extension, $allowedExtensions)) {
+                // Delete old photo if it exists
+                if ($pelanggan->foto_rumah) {
+                    $oldPath = storage_path('app/public/' . $pelanggan->foto_rumah);
+                    if (file_exists($oldPath)) {
+                        @unlink($oldPath);
+                    }
+                }
+
+                $filename = time() . '_' . uniqid() . '.' . $extension;
+                $targetDir = storage_path('app/public/foto_rumah');
+                if (!file_exists($targetDir)) {
+                    @mkdir($targetDir, 0755, true);
+                    @chmod($targetDir, 0755);
+                }
+                $file->move($targetDir, $filename);
+                @chmod($targetDir . '/' . $filename, 0644);
+                $validated['foto_rumah'] = 'foto_rumah/' . $filename;
+            }
+        }
 
         $pelanggan->update($validated);
 
@@ -143,12 +189,54 @@ class PelangganController extends Controller
         return redirect()->route('pelanggan.index')->with('success', 'Pelanggan berhasil dihapus');
     }
 
+    public function destroyDirect(Pelanggan $pelanggan)
+    {
+        $user = auth()->user();
+        if (!$user || !$user->hasPermission('pelanggan_manage')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        try {
+            \App\Helpers\ActivityLogger::log('Menghapus pelanggan/registrasi: ' . $pelanggan->nama_pelanggan . ' (' . $pelanggan->kode_pelanggan . ')', 'pelanggan');
+            
+            if ($pelanggan->foto_rumah) {
+                $filePath = storage_path('app/public/' . $pelanggan->foto_rumah);
+                if (file_exists($filePath)) {
+                    @unlink($filePath);
+                }
+            }
+            
+            $isReg = str_starts_with($pelanggan->kode_pelanggan, 'REG');
+            
+            $userId = $pelanggan->id_user;
+            $pelanggan->delete();
+            
+            if ($userId) {
+                \App\Models\User::where('id', $userId)->delete();
+            }
+            
+            if ($isReg) {
+                return redirect()->route('pelanggan.registrasi.index')->with('success', 'Pendaftaran berhasil dihapus');
+            }
+            return redirect()->route('pelanggan.index')->with('success', 'Pelanggan berhasil dihapus');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Gagal menghapus pelanggan: ' . $e->getMessage());
+        }
+    }
+
     public function show(Pelanggan $pelanggan)
     {
         // Security check
         $user = auth()->user();
-        if ($user->id_role != 1 && $pelanggan->id_user != $user->id) {
+        if (!$user->hasPermission('pelanggan_manage') && $pelanggan->id_user !== $user->id) {
             abort(403, 'Unauthorized action.');
+        }
+
+        if (request()->query('action') === 'delete') {
+            if (!$user->hasPermission('pelanggan_manage')) {
+                abort(403, 'Unauthorized action.');
+            }
+            return $this->destroyDirect($pelanggan);
         }
 
         $mikrotikData = null;
@@ -303,7 +391,7 @@ class PelangganController extends Controller
     {
         // Security check
         $user = auth()->user();
-        if ($user->id_role != 1 && $pelanggan->id_user != $user->id) {
+        if (!in_array($user->id_role, [1, 2]) && $pelanggan->id_user != $user->id) {
             abort(403, 'Unauthorized action.');
         }
 

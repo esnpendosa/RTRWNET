@@ -22,6 +22,15 @@ use Illuminate\Support\Facades\Route;
 
     <ul class="menu-inner py-1">
         @foreach ($menuData[0]->menu as $menu)
+        @php
+            $roleName = auth()->user()->role ? auth()->user()->role->name : 'Pelanggan';
+            $isPelanggan = ($roleName === 'Pelanggan' || auth()->user()->id_role == 4);
+            
+            // Skip "Koneksi Saya" for non-customers (Admin, Manager, Technician)
+            if (isset($menu->slug) && $menu->slug === 'my-connection' && !$isPelanggan) {
+                continue;
+            }
+        @endphp
         @if (!isset($menu->permission) || (auth()->check() && auth()->user()->hasPermission($menu->permission)))
 
         {{-- adding active and open class if child is active --}}

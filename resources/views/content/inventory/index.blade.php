@@ -20,6 +20,7 @@
                                 <th>Gambar</th>
                                 <th>Nama Alat</th>
                                 <th>Kategori</th>
+                                <th>Harga Beli</th>
                                 <th>Stok</th>
                                 <th>Kondisi</th>
                                 <th>Status</th>
@@ -41,6 +42,13 @@
                                 </td>
                                 <td><strong>{{ $item->nama_alat }}</strong><br><small class="text-muted">{{ $item->serial_number }}</small></td>
                                 <td><span class="badge bg-label-info">{{ $item->kategori }}</span></td>
+                                <td>
+                                    @if($item->harga_beli)
+                                    <span class="fw-semibold text-dark">Rp {{ number_format($item->harga_beli, 0, ',', '.') }}</span>
+                                    @else
+                                    <span class="text-muted small">-</span>
+                                    @endif
+                                </td>
                                 <td><span class="fw-bold">{{ $item->stok }}</span></td>
                                 <td>
                                     @if($item->kondisi == 'baik')
@@ -80,16 +88,45 @@
                                     @endif
                                 </td>
                                 <td>
-                                    <div class="dropdown">
-                                        <button type="button" class="btn p-0 dropdown-toggle hide-arrow" data-bs-toggle="dropdown"><i class="bx bx-dots-vertical-rounded"></i></button>
-                                        <div class="dropdown-menu">
-                                            <a class="dropdown-menu-item" href="{{ route('inventory.show', $item->id_inventory) }}"><i class="bx bx-show me-1"></i> Detail Riwayat</a>
-                                            <a class="dropdown-menu-item" href="javascript:void(0);" data-bs-toggle="modal" data-bs-target="#editModal{{ $item->id_inventory }}"><i class="bx bx-edit-alt me-1"></i> Edit Alat</a>
-                                            <a class="dropdown-menu-item" href="javascript:void(0);" data-bs-toggle="modal" data-bs-target="#assignModal{{ $item->id_inventory }}"><i class="bx bx-transfer-alt me-1"></i> Alokasikan</a>
-                                            <form action="{{ route('inventory.destroy', $item->id_inventory) }}" method="POST" class="d-inline">
-                                                @csrf @method('DELETE')
-                                                <button type="submit" class="dropdown-menu-item text-danger border-0 bg-transparent w-100 text-start" onclick="return confirm('Hapus alat ini?')"><i class="bx bx-trash me-1"></i> Hapus</button>
-                                            </form>
+                                    <div class="d-inline-flex gap-1 align-items-center">
+                                        <a href="{{ route('inventory.show', $item->id_inventory) }}" class="btn btn-xs btn-outline-info" title="Detail Riwayat">
+                                            <i class="bx bx-show"></i>
+                                        </a>
+                                        <button type="button" class="btn btn-xs btn-outline-warning" data-bs-toggle="modal" data-bs-target="#editModal{{ $item->id_inventory }}" title="Edit Alat">
+                                            <i class="bx bx-edit-alt"></i>
+                                        </button>
+                                        <!-- Trigger Button for Bootstrap Modal -->
+                                        <button type="button" class="btn btn-xs btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteModal{{ $item->id_inventory }}" title="Hapus">
+                                            <i class="bx bx-trash"></i>
+                                        </button>
+
+                                        <div class="dropdown d-inline-block">
+                                            <button type="button" class="btn btn-xs btn-outline-secondary dropdown-toggle hide-arrow" data-bs-toggle="dropdown"><i class="bx bx-dots-vertical-rounded"></i></button>
+                                            <div class="dropdown-menu">
+                                                <a class="dropdown-item" href="javascript:void(0);" data-bs-toggle="modal" data-bs-target="#assignModal{{ $item->id_inventory }}"><i class="bx bx-transfer-alt me-1"></i> Alokasikan</a>
+                                            </div>
+                                        </div>
+
+                                        <!-- Premium Center-aligned Delete Modal -->
+                                        <div class="modal fade" id="deleteModal{{ $item->id_inventory }}" tabindex="-1" aria-hidden="true">
+                                            <div class="modal-dialog modal-dialog-centered modal-sm">
+                                                <div class="modal-content">
+                                                    <div class="modal-header">
+                                                        <h5 class="modal-title">Konfirmasi</h5>
+                                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                    </div>
+                                                    <div class="modal-body" style="white-space: normal;">
+                                                        Apakah Anda yakin ingin menghapus alat <strong>{{ $item->nama_alat }}</strong>?
+                                                    </div>
+                                                    <div class="modal-footer">
+                                                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
+                                                        <form action="{{ route('inventory.destroy', $item->id_inventory) }}" method="POST" class="d-inline">
+                                                            @csrf @method('DELETE')
+                                                            <button type="submit" class="btn btn-danger">Hapus</button>
+                                                        </form>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </td>
@@ -171,11 +208,17 @@
                                                         <label class="form-label">Kategori</label>
                                                         <input type="text" name="kategori" class="form-control" value="{{ $item->kategori }}">
                                                     </div>
-                                                    <div class="col-md-3">
+                                                    <div class="col-md-6">
+                                                        <label class="form-label">Harga Beli (Rp)</label>
+                                                        <input type="number" name="harga_beli" class="form-control" value="{{ $item->harga_beli }}" placeholder="e.g. 150000">
+                                                    </div>
+                                                </div>
+                                                <div class="row mb-3">
+                                                    <div class="col-md-6">
                                                         <label class="form-label">Stok</label>
                                                         <input type="number" name="stok" class="form-control" value="{{ $item->stok }}">
                                                     </div>
-                                                    <div class="col-md-3">
+                                                    <div class="col-md-6">
                                                         <label class="form-label">Merk</label>
                                                         <input type="text" name="merk" class="form-control" value="{{ $item->merk }}">
                                                     </div>
@@ -253,11 +296,17 @@
                             <label class="form-label">Kategori</label>
                             <input type="text" name="kategori" class="form-control" placeholder="e.g. Tools">
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Harga Beli (Rp)</label>
+                            <input type="number" name="harga_beli" class="form-control" placeholder="e.g. 150000">
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
                             <label class="form-label">Stok</label>
                             <input type="number" name="stok" class="form-control" value="1">
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-6">
                             <label class="form-label">Merk</label>
                             <input type="text" name="merk" class="form-control" placeholder="e.g. Stanley">
                         </div>

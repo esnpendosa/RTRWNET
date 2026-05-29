@@ -80,6 +80,17 @@ Route::middleware(['auth'])->group(function () {
     // Dashboard
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
+    // Intern Tasks & Kanban Board
+    Route::post('/intern/tasks/{task}/status', [DashboardController::class, 'updateInternTaskStatus'])->name('intern.tasks.update-status');
+
+    // Admin Intern Tasks Management (Protected by can:user_manage)
+    Route::middleware('can:user_manage')->group(function() {
+        Route::get('/admin/intern-tasks', [DashboardController::class, 'adminInternTasksIndex'])->name('admin.intern-tasks.index');
+        Route::post('/admin/intern-tasks', [DashboardController::class, 'adminStoreInternTask'])->name('admin.intern-tasks.store');
+        Route::put('/admin/intern-tasks/{task}', [DashboardController::class, 'adminUpdateInternTask'])->name('admin.intern-tasks.update');
+        Route::delete('/admin/intern-tasks/{task}', [DashboardController::class, 'adminDeleteInternTask'])->name('admin.intern-tasks.destroy');
+    });
+
     // Pelanggan
     Route::middleware('can:pelanggan_manage')->group(function() {
         Route::get('registrasi', [PelangganController::class, 'registrasiIndex'])->name('pelanggan.registrasi.index');
@@ -87,6 +98,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/pelanggan/card-massal', [PelangganController::class, 'cardMassal'])->name('pelanggan.card-massal');
         Route::get('/pelanggan/export', [PelangganController::class, 'export'])->name('pelanggan.export');
         Route::get('/pelanggan/{pelanggan}/card', [PelangganController::class, 'card'])->name('pelanggan.card');
+        Route::get('pelanggan/{pelanggan}/delete-direct', [PelangganController::class, 'destroyDirect'])->name('pelanggan.destroy-direct');
         Route::resource('pelanggan', PelangganController::class);
         Route::resource('odc-odp', OdcOdpController::class);
         Route::post('pelanggan-import', [PelangganController::class, 'import'])->name('pelanggan.import');
@@ -118,11 +130,12 @@ Route::middleware(['auth'])->group(function () {
 
 
 
-    // Tiket
-    Route::middleware('can:tiket_manage')->group(function() {
-        Route::resource('tiket', TiketController::class);
-        Route::post('tiket/{tiket}/status', [TiketController::class, 'updateStatus'])->name('tiket.status');
-    });
+    // Tiket (Fine-grained role authorization is handled inside TiketController)
+    Route::resource('tiket', TiketController::class);
+    Route::post('tiket/{tiket}/status', [TiketController::class, 'updateStatus'])->name('tiket.status');
+    Route::post('tiket/{tiket}/assign-teknisi', [TiketController::class, 'assignTeknisi'])->name('tiket.assign-teknisi');
+    Route::get('tiket/{tiket}/chats', [TiketController::class, 'getChats'])->name('tiket.chats');
+    Route::post('tiket/{tiket}/chats', [TiketController::class, 'sendChat'])->name('tiket.chats.send');
 
     // Mikrotik
     Route::middleware('can:mikrotik_monitor')->group(function() {
@@ -141,7 +154,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('kas-bon', [\App\Http\Controllers\KasBonController::class, 'store'])->name('kas-bon.store');
     Route::put('kas-bon/{id}', [\App\Http\Controllers\KasBonController::class, 'update'])->name('kas-bon.update');
     Route::patch('kas-bon/{id}/pay', [\App\Http\Controllers\KasBonController::class, 'pay'])->name('kas-bon.pay');
-    Route::delete('kas-bon/{id}', [\App\Http\Controllers\KasBonController::class, 'destroy'])->name('kas-bon.destroy');
+    Route::get('kas-bon/{id}/delete', [\App\Http\Controllers\KasBonController::class, 'destroy'])->name('kas-bon.destroy');
 
     // Management Pengguna
     Route::middleware('can:user_manage')->group(function() {
@@ -222,7 +235,31 @@ Route::middleware(['auth'])->group(function () {
     Route::get('system/logs/fetch', [\App\Http\Controllers\LogController::class, 'fetch'])->name('logs.fetch');
     Route::post('system/logs/clear', [\App\Http\Controllers\LogController::class, 'clear'])->name('logs.clear');
 
+    // Kepegawaian & Absensi Pegawai
+    Route::get('absensi', [\App\Http\Controllers\AttendanceController::class, 'index'])->name('absensi.index');
+    Route::get('absensi/today', [\App\Http\Controllers\AttendanceController::class, 'today'])->name('absensi.today');
+    
+    Route::middleware('can:user_manage')->group(function() {
+        Route::get('absensi/settings', [\App\Http\Controllers\AttendanceController::class, 'showSettings'])->name('absensi.settings');
+        Route::post('absensi/settings', [\App\Http\Controllers\AttendanceController::class, 'storeSettings'])->name('absensi.settings.store');
+        Route::post('absensi/manual', [\App\Http\Controllers\AttendanceController::class, 'storeManual'])->name('absensi.store-manual');
+        Route::post('absensi/import', [\App\Http\Controllers\AttendanceController::class, 'importCsv'])->name('absensi.import');
+        Route::get('absensi/export', [\App\Http\Controllers\AttendanceController::class, 'exportExcel'])->name('absensi.export');
+        Route::delete('absensi/{id}', [\App\Http\Controllers\AttendanceController::class, 'destroy'])->name('absensi.destroy');
+
+        // Keuangan & PSB
+        Route::get('keuangan', [\App\Http\Controllers\KeuanganController::class, 'index'])->name('keuangan.index');
+        Route::post('keuangan', [\App\Http\Controllers\KeuanganController::class, 'store'])->name('keuangan.store');
+        Route::put('keuangan/{id}', [\App\Http\Controllers\KeuanganController::class, 'update'])->name('keuangan.update');
+        Route::delete('keuangan/{id}', [\App\Http\Controllers\KeuanganController::class, 'destroy'])->name('keuangan.destroy');
+    });
+
 });
+
+// ADMS (Solution X105 Fingerprint Machine Push Protocol)
+Route::any('iclock/cdata', [\App\Http\Controllers\AttendanceController::class, 'handleADMS']);
+Route::any('iclock/getrequest', [\App\Http\Controllers\AttendanceController::class, 'handleADMS']);
+Route::post('absensi/webhook', [\App\Http\Controllers\AttendanceController::class, 'handleGeneric']);
 
 // Public Wifi Registration routes (Guest access)
 Route::get('register-wifi', [\App\Http\Controllers\PublicRegistrationController::class, 'showForm'])->name('public.register');

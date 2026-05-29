@@ -112,6 +112,13 @@
       "permission": "billing_view"
     },
     {
+      "url": "/keuangan",
+      "name": "Keuangan & PSB",
+      "icon": "menu-icon icon-base bx bx-calculator",
+      "slug": "keuangan",
+      "permission": "user_manage"
+    },
+    {
       "url": "/settings/payment",
       "name": "Set Pembayaran",
       "icon": "menu-icon icon-base bx bx-cog",
@@ -122,10 +129,40 @@
       "menuHeader": "Sistem"
     },
     {
+      "name": "Absensi Pegawai",
+      "icon": "menu-icon icon-base bx bx-fingerprint",
+      "slug": "absensi",
+      "submenu": [
+        {
+          "url": "/absensi/today",
+          "name": "Absensi Hari Ini",
+          "slug": "absensi-today"
+        },
+        {
+          "url": "/absensi",
+          "name": "Rekap Kehadiran",
+          "slug": "absensi-recap"
+        },
+        {
+          "url": "/absensi/settings",
+          "name": "Pengaturan Alat",
+          "slug": "absensi-settings",
+          "permission": "user_manage"
+        }
+      ]
+    },
+    {
       "url": "/users",
       "name": "Manajemen Pengguna",
       "icon": "menu-icon icon-base bx bx-group",
       "slug": "users",
+      "permission": "user_manage"
+    },
+    {
+      "url": "/admin/intern-tasks",
+      "name": "Task List Magang",
+      "icon": "menu-icon icon-base bx bx-task",
+      "slug": "admin-intern-tasks",
       "permission": "user_manage"
     },
     {

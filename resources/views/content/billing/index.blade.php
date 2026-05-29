@@ -12,7 +12,10 @@
     
     // Summary Stats
     $user = auth()->user();
-    if ($user->id_role == 4) {
+    $roleName = $user->role ? $user->role->name : 'Pelanggan';
+    $isPelanggan = ($roleName === 'Pelanggan' || $user->id_role == 4);
+    
+    if ($isPelanggan) {
         $totalTagihan = \App\Models\Tagihan::whereHas('pelanggan', fn($q) => $q->where('id_user', $user->id))->count();
         $totalPaid = \App\Models\Tagihan::where('status', 'paid')->whereHas('pelanggan', fn($q) => $q->where('id_user', $user->id))->count();
         $totalUnpaid = \App\Models\Tagihan::where('status', 'unpaid')->whereHas('pelanggan', fn($q) => $q->where('id_user', $user->id))->count();
@@ -35,6 +38,7 @@
     }
 @endphp
 
+@if(!$isPelanggan)
 <div class="row mb-4">
     <div class="col-sm-6 col-lg-4">
         <div class="card card-border-shadow-primary h-100">
@@ -83,10 +87,13 @@
                     <small class="text-danger fw-semibold">{{ $totalUnpaid }}</small>
                     <small class="text-muted"> perlu ditindaklanjuti</small>
                 </p>
+            </div>
         </div>
     </div>
 </div>
+@endif
 
+@if(!$isPelanggan)
 <div class="row mb-4">
     <div class="col-sm-6 col-lg-6 mb-3 mb-sm-0">
         <div class="card card-border-shadow-success h-100 shadow-sm">
@@ -121,6 +128,7 @@
         </div>
     </div>
 </div>
+@endif
 
 <div class="card mb-4">
     <div class="card-header border-bottom p-0">
@@ -148,6 +156,7 @@
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h5 class="mb-0">Daftar Tagihan Pelanggan</h5>
             <div class="d-flex align-items-center">
+                @if(!$isPelanggan)
                 <form action="{{ route('billing.index') }}" method="GET" class="me-2" id="searchBillingForm">
                     @if(request('status'))
                         <input type="hidden" name="status" value="{{ request('status') }}">
@@ -163,6 +172,7 @@
                     </div>
                     <button type="submit" style="display: none;"></button>
                 </form>
+                @endif
                 @if(auth()->user()->id_role == 1)
                 <a href="{{ route('billing.delete-all-direct') }}" class="btn btn-outline-danger btn-sm me-2">
                     <i class="bx bx-trash me-1" style="pointer-events: none;"></i> Kosongkan Semua

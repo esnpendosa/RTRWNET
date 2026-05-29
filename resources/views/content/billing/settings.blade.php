@@ -170,6 +170,13 @@
                 
                 <h6 class="mb-3">🚀 Eksekusi Manual (Force Sync)</h6>
                 <div class="d-flex flex-wrap gap-2">
+                    <form action="{{ route('settings.billing.isolir', ['type' => 'reminder']) }}" method="POST">
+                        @csrf
+                        <button type="submit" class="btn btn-outline-warning btn-sm">
+                            <i class="bx bx-bell me-1"></i> Kirim Reminder WA (Tagihan Unpaid)
+                        </button>
+                    </form>
+                    
                     <form action="{{ route('settings.billing.isolir', ['type' => 'disable']) }}" method="POST">
                         @csrf
                         <button type="submit" class="btn btn-outline-danger btn-sm">

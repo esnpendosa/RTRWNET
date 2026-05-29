@@ -7,7 +7,7 @@
 
 <div class="card">
   <div class="card-body">
-    <form action="{{ route('pelanggan.store') }}" method="POST">
+    <form action="{{ route('pelanggan.store') }}" method="POST" enctype="multipart/form-data">
       @csrf
       <div class="row">
         <div class="col-md-6 mb-3">
@@ -30,6 +30,11 @@
         <div class="col-md-6 mb-3">
           <label class="form-label">Alamat</label>
           <textarea name="alamat" class="form-control" required></textarea>
+        </div>
+        <div class="col-md-6 mb-3">
+          <label class="form-label">Foto Rumah</label>
+          <input type="file" name="foto_rumah" class="form-control" accept="image/*" />
+          <small class="text-muted">Opsional, upload foto depan rumah.</small>
         </div>
         <div class="col-md-6 mb-3">
           <label class="form-label">Latitude</label>

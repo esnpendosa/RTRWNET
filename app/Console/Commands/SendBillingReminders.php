@@ -14,7 +14,7 @@ class SendBillingReminders extends Command
      *
      * @var string
      */
-    protected $signature = 'billing:remind';
+    protected $signature = 'billing:remind {--force : Force send reminders ignoring scheduled date}';
 
     /**
      * The console command description.
@@ -42,7 +42,7 @@ class SendBillingReminders extends Command
 
         $reminderDate = (int) Setting::get('billing_reminder_date', '5');
         
-        if (now()->day != $reminderDate) {
+        if (!$this->option('force') && now()->day != $reminderDate) {
             $this->info("Today is " . now()->day . ". Reminder is scheduled for day {$reminderDate}. Skipping...");
             return;
         }

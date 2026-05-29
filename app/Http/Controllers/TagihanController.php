@@ -52,7 +52,10 @@ class TagihanController extends Controller
         }
 
         // If user is a customer, only show their own bills
-        if ($user->id_role == 4) {
+        $roleName = $user->role ? $user->role->name : 'Pelanggan';
+        $isPelanggan = ($roleName === 'Pelanggan' || $user->id_role == 4);
+
+        if ($isPelanggan) {
             $query->whereHas('pelanggan', function ($q) use ($user) {
                 $q->where('id_user', $user->id);
             });
@@ -65,7 +68,7 @@ class TagihanController extends Controller
 
     public function updateAmount(Request $request, Tagihan $tagihan)
     {
-        if (auth()->user()->id_role != 1) abort(403);
+        if (!in_array(auth()->user()->id_role, [1, 2])) abort(403);
 
         $request->validate([
             'jumlah' => 'required|numeric|min:0',
@@ -82,7 +85,7 @@ class TagihanController extends Controller
 
     public function update(Request $request, Tagihan $tagihan)
     {
-        if (auth()->user()->id_role != 1) abort(403);
+        if (!in_array(auth()->user()->id_role, [1, 2])) abort(403);
 
         $request->validate([
             'bulan' => 'required|integer|min:1|max:12',
@@ -125,7 +128,7 @@ class TagihanController extends Controller
 
     public function destroy(Tagihan $tagihan)
     {
-        if (auth()->user()->id_role != 1) abort(403);
+        if (!in_array(auth()->user()->id_role, [1, 2])) abort(403);
 
         try {
             // Hapus file fisik bukti transfer jika ada
@@ -146,7 +149,7 @@ class TagihanController extends Controller
 
     public function deleteAll()
     {
-        if (auth()->user()->id_role != 1) abort(403);
+        if (!in_array(auth()->user()->id_role, [1, 2])) abort(403);
 
         try {
             // Hapus semua file fisik bukti transfer terlebih dahulu
@@ -169,7 +172,7 @@ class TagihanController extends Controller
 
     public function destroyDirect(Tagihan $tagihan)
     {
-        if (auth()->user()->id_role != 1) abort(403);
+        if (!in_array(auth()->user()->id_role, [1, 2])) abort(403);
 
         try {
             // Hapus file fisik bukti transfer jika ada
@@ -190,7 +193,7 @@ class TagihanController extends Controller
 
     public function deleteAllDirect()
     {
-        if (auth()->user()->id_role != 1) abort(403);
+        if (!in_array(auth()->user()->id_role, [1, 2])) abort(403);
 
         try {
             // Hapus semua file fisik bukti transfer terlebih dahulu
@@ -333,8 +336,8 @@ class TagihanController extends Controller
 
     public function verifikasi(Request $request, Tagihan $tagihan)
     {
-        // Only admin should access this
-        if (auth()->user()->id_role != 1) {
+        // Admin or Manager
+        if (!in_array(auth()->user()->id_role, [1, 2])) {
             abort(403);
         }
 
@@ -368,14 +371,14 @@ class TagihanController extends Controller
 
     public function settings()
     {
-        if (auth()->user()->id_role != 1) abort(403);
+        if (!in_array(auth()->user()->id_role, [1, 2])) abort(403);
         
         return view('content.billing.settings');
     }
 
     public function updateSettings(Request $request)
     {
-        if (auth()->user()->id_role != 1) abort(403);
+        if (!in_array(auth()->user()->id_role, [1, 2])) abort(403);
 
         // Form 1: Konfigurasi Metode Pembayaran
         if ($request->has('midtrans_merchant_id') || $request->has('manual_methods') || $request->has('gateway_enabled') || $request->has('manual_enabled')) {
@@ -412,7 +415,7 @@ class TagihanController extends Controller
 
     public function clearAllPhoneNumbers()
     {
-        if (auth()->user()->id_role != 1) abort(403);
+        if (!in_array(auth()->user()->id_role, [1, 2])) abort(403);
 
         try {
             \App\Models\Pelanggan::query()->update(['no_wa' => null]);
@@ -426,7 +429,7 @@ class TagihanController extends Controller
     {
         // For security, maybe check if user is admin or the owner of the bill
         $user = auth()->user();
-        if ($user && $user->id_role != 1 && $tagihan->pelanggan->id_user != $user->id) {
+        if ($user && !in_array($user->id_role, [1, 2]) && $tagihan->pelanggan->id_user != $user->id) {
             abort(403);
         }
 
@@ -443,7 +446,7 @@ class TagihanController extends Controller
     }
     public function payCash(Tagihan $tagihan)
     {
-        if (auth()->user()->id_role != 1) abort(403);
+        if (!in_array(auth()->user()->id_role, [1, 2])) abort(403);
 
         $tagihan->update([
             'status' => 'paid',
@@ -477,7 +480,7 @@ class TagihanController extends Controller
 
     public function sendReceiptWa(Tagihan $tagihan)
     {
-        if (auth()->user()->id_role != 1) abort(403);
+        if (!in_array(auth()->user()->id_role, [1, 2])) abort(403);
         
         $pelanggan = $tagihan->pelanggan;
         if (!$pelanggan || !$pelanggan->no_wa) {
@@ -495,11 +498,17 @@ class TagihanController extends Controller
 
     public function runIsolirSync(Request $request)
     {
-        if (auth()->user()->id_role != 1) abort(403);
+        if (!in_array(auth()->user()->id_role, [1, 2])) abort(403);
 
-        $type = $request->query('type', 'all'); // 'disable', 'enable', 'all'
+        $type = $request->query('type', 'all'); // 'disable', 'enable', 'all', 'reminder'
         
         try {
+            if ($type == 'reminder') {
+                \Illuminate\Support\Facades\Artisan::call('billing:remind', ['--force' => true]);
+                $output = \Illuminate\Support\Facades\Artisan::output();
+                return back()->with('success', 'Pengiriman pengingat WhatsApp selesai dijalankan. Hasil: ' . nl2br($output));
+            }
+
             if ($type == 'disable' || $type == 'all') {
                 \Illuminate\Support\Facades\Artisan::call('billing:disable-unpaid', ['--force' => true]);
             }

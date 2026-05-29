@@ -25,6 +25,16 @@
 
                 <ul class="list-group list-group-flush">
                     <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>Harga Beli</span>
+                        <span class="fw-bold text-success">
+                            @if($inventory->harga_beli)
+                            Rp {{ number_format($inventory->harga_beli, 0, ',', '.') }}
+                            @else
+                            -
+                            @endif
+                        </span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
                         <span>Merk</span>
                         <span class="fw-bold">{{ $inventory->merk ?? '-' }}</span>
                     </li>

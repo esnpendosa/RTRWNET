@@ -43,3 +43,9 @@ yarn-error.log
 # Ignore Excel files used for import
 /*.xlsx
 /~$*.xlsx
+
+# Scratch and temporary files
+/scratch
+/scratch_*
+*.docx
+

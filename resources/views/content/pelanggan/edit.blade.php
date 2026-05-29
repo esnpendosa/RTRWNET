@@ -7,7 +7,7 @@
 
 <div class="card">
   <div class="card-body">
-    <form action="{{ route('pelanggan.update', $pelanggan->id_pelanggan) }}" method="POST">
+    <form action="{{ route('pelanggan.update', $pelanggan->id_pelanggan) }}" method="POST" enctype="multipart/form-data">
       @csrf
       @method('PUT')
       <div class="row">
@@ -31,6 +31,19 @@
         <div class="col-md-6 mb-3">
           <label class="form-label">Alamat</label>
           <textarea name="alamat" class="form-control" required>{{ $pelanggan->alamat }}</textarea>
+        </div>
+        <div class="col-md-6 mb-3">
+          <label class="form-label">Foto Rumah</label>
+          <input type="file" name="foto_rumah" class="form-control" accept="image/*" />
+          <small class="text-muted">Opsional, upload foto baru untuk mengganti foto lama.</small>
+          @if($pelanggan->foto_rumah)
+            <div class="mt-2">
+              <a href="{{ asset('storage/' . $pelanggan->foto_rumah) }}" target="_blank">
+                <img src="{{ asset('storage/' . $pelanggan->foto_rumah) }}" alt="Foto Rumah" class="img-thumbnail" style="max-height: 100px;" />
+              </a>
+              <div class="small text-muted">Klik gambar untuk memperbesar</div>
+            </div>
+          @endif
         </div>
         <div class="col-md-6 mb-3">
           <label class="form-label">Latitude</label>

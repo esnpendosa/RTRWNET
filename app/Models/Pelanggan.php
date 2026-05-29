@@ -35,6 +35,7 @@ class Pelanggan extends Model
         'last_online_status',
         'last_ping_at',
         'billing_date',
+        'foto_rumah',
     ];
 
     public function user()

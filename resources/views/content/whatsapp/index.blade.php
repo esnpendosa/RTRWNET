@@ -292,12 +292,89 @@
             }
         });
 
+        // Disconnect / Logout Session
         document.querySelectorAll('.stop-session').forEach(btn => {
             btn.addEventListener('click', function() {
-                if(confirm('Yakin ingin memutuskan koneksi perangkat ini?')) {
-                    axios.post("{{ route('whatsapp.session.stop') }}", { id: this.dataset.id })
-                        .then(() => location.reload());
-                }
+                const sessionId = this.dataset.id;
+                Swal.fire({
+                    title: 'Disconnect Perangkat?',
+                    text: "Koneksi WhatsApp pada sesi '" + sessionId + "' akan terputus.",
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#ffab00',
+                    cancelButtonColor: '#8592a3',
+                    confirmButtonText: 'Ya, Putuskan!',
+                    cancelButtonText: 'Batal',
+                    showLoaderOnConfirm: true,
+                    preConfirm: () => {
+                        return axios.post("{{ route('whatsapp.session.stop') }}", { id: sessionId, _token: "{{ csrf_token() }}" })
+                            .then(response => {
+                                if (response.data.error) {
+                                    throw new Error(response.data.error);
+                                }
+                                return response.data;
+                            })
+                            .catch(error => {
+                                Swal.showValidationMessage(
+                                    `Gagal: ${error.response?.data?.error || error.message || 'Server Error'}`
+                                );
+                            });
+                    },
+                    allowOutsideClick: () => !Swal.isLoading()
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Terputus!',
+                            text: 'Sesi WhatsApp berhasil diputuskan.',
+                            timer: 1500,
+                            showConfirmButton: false
+                        }).then(() => location.reload());
+                    }
+                });
+            });
+        });
+
+        // Delete Session Permanently
+        document.querySelectorAll('.delete-session').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const sessionId = this.dataset.id;
+                Swal.fire({
+                    title: 'Hapus Sesi Permanen?',
+                    text: "Semua data autentikasi untuk sesi '" + sessionId + "' akan dihapus dari server.",
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#ff3e1d',
+                    cancelButtonColor: '#8592a3',
+                    confirmButtonText: 'Ya, Hapus!',
+                    cancelButtonText: 'Batal',
+                    showLoaderOnConfirm: true,
+                    preConfirm: () => {
+                        return axios.post("{{ route('whatsapp.session.stop') }}", { id: sessionId, _token: "{{ csrf_token() }}" })
+                            .then(response => {
+                                if (response.data.error) {
+                                    throw new Error(response.data.error);
+                                }
+                                return response.data;
+                            })
+                            .catch(error => {
+                                Swal.showValidationMessage(
+                                    `Gagal: ${error.response?.data?.error || error.message || 'Server Error'}`
+                                );
+                            });
+                    },
+                    allowOutsideClick: () => !Swal.isLoading()
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Terhapus!',
+                            text: 'Sesi WhatsApp berhasil dihapus secara permanen.',
+                            timer: 1500,
+                            showConfirmButton: false
+                        }).then(() => location.reload());
+                    }
+                });
             });
         });
 

@@ -26,6 +26,14 @@ return Application::configure(basePath: dirname(__DIR__))
           'whatsapp/webhook',
           'whatsapp/status',
           'whatsapp/train',
+          'iclock/*',
+          '/iclock/*',
+          'absensi/webhook',
+          '/absensi/webhook',
+      ]);
+
+      $middleware->web(append: [
+          \App\Http\Middleware\RestrictIntern::class,
       ]);
   })
   ->withExceptions(function (Exceptions $exceptions) {

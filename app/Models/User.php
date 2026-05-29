@@ -22,6 +22,8 @@ class User extends Authenticatable
         'email',
         'password',
         'id_role',
+        'pin_fingerspot',
+        'no_hp',
         'username_email',
         'is_active',
         'last_login_at',
@@ -65,6 +67,11 @@ class User extends Authenticatable
     public function pelanggan()
     {
         return $this->hasOne(Pelanggan::class, 'id_user');
+    }
+
+    public function absensis()
+    {
+        return $this->hasMany(Absensi::class, 'user_id');
     }
 
     public function hasPermission($permissionCode)
