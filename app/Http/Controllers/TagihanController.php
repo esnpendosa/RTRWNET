@@ -12,8 +12,19 @@ class TagihanController extends Controller
     {
         $search = $request->query('search');
         $status = $request->query('status');
+        $filterKhusus = $request->query('filter_khusus');
+        $filterBulan = $request->query('filter_bulan');
+        $filterTahun = $request->query('filter_tahun');
         $user = auth()->user();
         $query = Tagihan::with('pelanggan');
+
+        if ($filterBulan) {
+            $query->where('bulan', $filterBulan);
+        }
+
+        if ($filterTahun) {
+            $query->where('tahun', $filterTahun);
+        }
 
         if ($search) {
             $query->where(function ($mainQuery) use ($search) {
@@ -51,6 +62,41 @@ class TagihanController extends Controller
             $query->where('status', $status);
         }
 
+        if ($filterKhusus) {
+            if ($filterKhusus === 'unpaid_3_months') {
+                $customerIds = Tagihan::where('status', 'unpaid')
+                    ->groupBy('id_pelanggan')
+                    ->havingRaw('count(*) >= 3')
+                    ->pluck('id_pelanggan');
+                $query->whereIn('id_pelanggan', $customerIds);
+            } elseif ($filterKhusus === 'unpaid_2_months') {
+                $customerIds = Tagihan::where('status', 'unpaid')
+                    ->groupBy('id_pelanggan')
+                    ->havingRaw('count(*) >= 2')
+                    ->pluck('id_pelanggan');
+                $query->whereIn('id_pelanggan', $customerIds);
+            } elseif ($filterKhusus === 'paid_3_months') {
+                $paidGroups = Tagihan::select('id_pelanggan', \Illuminate\Support\Facades\DB::raw('DATE(paid_at) as pay_date'))
+                    ->where('status', 'paid')
+                    ->whereNotNull('paid_at')
+                    ->groupBy('id_pelanggan', \Illuminate\Support\Facades\DB::raw('DATE(paid_at)'))
+                    ->havingRaw('count(*) >= 3')
+                    ->get();
+                
+                $query->where(function($q) use ($paidGroups) {
+                    foreach ($paidGroups as $group) {
+                        $q->orWhere(function($sub) use ($group) {
+                            $sub->where('id_pelanggan', $group->id_pelanggan)
+                                ->whereDate('paid_at', $group->pay_date);
+                        });
+                    }
+                    if ($paidGroups->isEmpty()) {
+                        $q->whereNull('id_tagihan');
+                    }
+                });
+            }
+        }
+
         // If user is a customer, only show their own bills
         $roleName = $user->role ? $user->role->name : 'Pelanggan';
         $isPelanggan = ($roleName === 'Pelanggan' || $user->id_role == 4);
@@ -64,6 +110,59 @@ class TagihanController extends Controller
         $tagihan = $query->latest()->get();
         $allPelanggan = Pelanggan::where('is_active', true)->orderBy('nama_pelanggan')->get();
         return view('content.billing.index', compact('tagihan', 'allPelanggan'));
+    }
+
+    public function store(Request $request)
+    {
+        if (!in_array(auth()->user()->id_role, [1, 2])) abort(403);
+
+        $request->validate([
+            'id_pelanggan' => 'required|exists:pelanggan,id_pelanggan',
+            'bulan' => 'required|integer|min:1|max:12',
+            'tahun' => 'required|integer',
+            'jumlah' => 'required|numeric|min:0',
+            'status' => 'required|in:unpaid,paid,pending,cancelled',
+            'metode_pembayaran' => 'nullable|string',
+            'paid_at' => 'nullable|date',
+            'catatan_admin' => 'nullable|string',
+        ]);
+
+        $exists = Tagihan::where('id_pelanggan', $request->id_pelanggan)
+            ->where('bulan', $request->bulan)
+            ->where('tahun', $request->tahun)
+            ->exists();
+
+        if ($exists) {
+            return back()->with('error', 'Gagal: Tagihan untuk pelanggan tersebut pada periode bulan/tahun ini sudah ada.');
+        }
+
+        $data = $request->only(['id_pelanggan', 'bulan', 'tahun', 'jumlah', 'status', 'metode_pembayaran', 'paid_at', 'catatan_admin']);
+
+        if ($data['status'] !== 'paid') {
+            $data['paid_at'] = null;
+            $data['metode_pembayaran'] = null;
+        }
+
+        $tagihan = Tagihan::create($data);
+
+        if ($tagihan->status === 'paid') {
+            $pelanggan = $tagihan->pelanggan;
+            if ($pelanggan && $pelanggan->id_router) {
+                try {
+                    $mikrotikService = app(\App\Services\MikrotikService::class);
+                    $success = $mikrotikService->setSecretStatus($pelanggan->router, $pelanggan->mikrotik_username ?: $pelanggan->kode_pelanggan, $pelanggan->mikrotik_type, false, $pelanggan->ip_address);
+                    if ($success) {
+                        $pelanggan->update(['is_active' => true]);
+                    }
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::error('Gagal sync Mikrotik pada tambah tagihan: ' . $e->getMessage());
+                }
+            }
+        }
+
+        \App\Helpers\ActivityLogger::log('Menambahkan data tagihan manual #' . $tagihan->id_tagihan . ' (' . ($tagihan->pelanggan ? $tagihan->pelanggan->nama_pelanggan : 'Umum') . ') status: ' . $tagihan->status, 'tagihan');
+
+        return back()->with('success', 'Tagihan manual berhasil disimpan.');
     }
 
     public function updateAmount(Request $request, Tagihan $tagihan)

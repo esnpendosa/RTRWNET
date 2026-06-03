@@ -11,9 +11,18 @@ use Illuminate\Support\Facades\Auth;
 
 class InventoryController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $items = InventoryItem::with(['technician', 'user'])->get();
+        $query = InventoryItem::with(['technician', 'user']);
+
+        if ($request->filled('tanggal_mulai')) {
+            $query->whereDate('tanggal_beli', '>=', $request->tanggal_mulai);
+        }
+        if ($request->filled('tanggal_selesai')) {
+            $query->whereDate('tanggal_beli', '<=', $request->tanggal_selesai);
+        }
+
+        $items = $query->get();
         $technicians = Teknisi::all();
         
         // Filter users: Admin (1), Manager (2?), Teknisi (3?) 
@@ -34,6 +43,7 @@ class InventoryController extends Controller
             'serial_number' => 'nullable|unique:inventory_items,serial_number',
             'stok' => 'nullable|integer|min:0',
             'harga_beli' => 'nullable|numeric|min:0',
+            'tanggal_beli' => 'nullable|date',
         ]);
 
         if ($request->hasFile('gambar_alat')) {
@@ -94,6 +104,7 @@ class InventoryController extends Controller
             'stok' => 'nullable|integer|min:0',
             'kondisi' => 'required',
             'harga_beli' => 'nullable|numeric|min:0',
+            'tanggal_beli' => 'nullable|date',
         ]);
 
         if ($request->hasFile('gambar_alat')) {

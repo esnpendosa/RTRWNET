@@ -13,6 +13,32 @@
                 </button>
             </div>
             <div class="card-body pt-4">
+                <!-- Date Filter Form -->
+                <form action="{{ route('inventory.index') }}" method="GET" class="mb-4 bg-light p-3 rounded" style="border: 1px solid #e5e7eb;">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold text-muted small">Tanggal Beli Mulai</label>
+                            <div class="input-group input-group-merge">
+                                <span class="input-group-text"><i class="bx bx-calendar"></i></span>
+                                <input type="date" name="tanggal_mulai" class="form-control" value="{{ request('tanggal_mulai') }}">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold text-muted small">Tanggal Beli Selesai</label>
+                            <div class="input-group input-group-merge">
+                                <span class="input-group-text"><i class="bx bx-calendar"></i></span>
+                                <input type="date" name="tanggal_selesai" class="form-control" value="{{ request('tanggal_selesai') }}">
+                            </div>
+                        </div>
+                        <div class="col-md-4 d-flex gap-2">
+                            <button type="submit" class="btn btn-primary flex-grow-1"><i class="bx bx-filter-alt me-1"></i> Filter</button>
+                            @if(request()->filled('tanggal_mulai') || request()->filled('tanggal_selesai'))
+                                <a href="{{ route('inventory.index') }}" class="btn btn-outline-secondary" title="Reset"><i class="bx bx-reset"></i></a>
+                            @endif
+                        </div>
+                    </div>
+                </form>
+
                 <div class="table-responsive text-nowrap">
                     <table class="table table-hover">
                         <thead>
@@ -20,8 +46,10 @@
                                 <th>Gambar</th>
                                 <th>Nama Alat</th>
                                 <th>Kategori</th>
+                                <th>Tanggal Beli</th>
                                 <th>Harga Beli</th>
                                 <th>Stok</th>
+                                <th>Total Harga</th>
                                 <th>Kondisi</th>
                                 <th>Status</th>
                                 <th>Pemegang</th>
@@ -43,6 +71,13 @@
                                 <td><strong>{{ $item->nama_alat }}</strong><br><small class="text-muted">{{ $item->serial_number }}</small></td>
                                 <td><span class="badge bg-label-info">{{ $item->kategori }}</span></td>
                                 <td>
+                                    @if($item->tanggal_beli)
+                                    <span class="text-muted small">{{ \Carbon\Carbon::parse($item->tanggal_beli)->format('d/m/Y') }}</span>
+                                    @else
+                                    <span class="text-muted small">-</span>
+                                    @endif
+                                </td>
+                                <td>
                                     @if($item->harga_beli)
                                     <span class="fw-semibold text-dark">Rp {{ number_format($item->harga_beli, 0, ',', '.') }}</span>
                                     @else
@@ -50,6 +85,9 @@
                                     @endif
                                 </td>
                                 <td><span class="fw-bold">{{ $item->stok }}</span></td>
+                                <td>
+                                    <span class="fw-semibold text-success">Rp {{ number_format(($item->harga_beli ?? 0) * ($item->stok ?? 1), 0, ',', '.') }}</span>
+                                </td>
                                 <td>
                                     @if($item->kondisi == 'baik')
                                     <span class="badge bg-label-success">Baik</span>
@@ -204,13 +242,17 @@
                                                     <input type="text" name="nama_alat" class="form-control" value="{{ $item->nama_alat }}" required>
                                                 </div>
                                                 <div class="row mb-3">
-                                                    <div class="col-md-6">
+                                                    <div class="col-md-4">
                                                         <label class="form-label">Kategori</label>
                                                         <input type="text" name="kategori" class="form-control" value="{{ $item->kategori }}">
                                                     </div>
-                                                    <div class="col-md-6">
+                                                    <div class="col-md-4">
                                                         <label class="form-label">Harga Beli (Rp)</label>
                                                         <input type="number" name="harga_beli" class="form-control" value="{{ $item->harga_beli }}" placeholder="e.g. 150000">
+                                                    </div>
+                                                    <div class="col-md-4">
+                                                        <label class="form-label">Tanggal Beli</label>
+                                                        <input type="date" name="tanggal_beli" class="form-control" value="{{ $item->tanggal_beli ? \Carbon\Carbon::parse($item->tanggal_beli)->format('Y-m-d') : '' }}">
                                                     </div>
                                                 </div>
                                                 <div class="row mb-3">
@@ -242,6 +284,15 @@
                             </div>
                             @endforeach
                         </tbody>
+                        <tfoot>
+                            <tr class="table-light border-top">
+                                <td colspan="3" class="text-end fw-bold">Total Keseluruhan:</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td class="fw-bold text-dark">{{ $items->sum('stok') }}</td>
+                                <td class="fw-bold text-success" colspan="5">Rp {{ number_format($items->sum(function($item) { return ($item->harga_beli ?? 0) * ($item->stok ?? 1); }), 0, ',', '.') }}</td>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
             </div>
@@ -292,13 +343,17 @@
                         <input type="text" name="nama_alat" class="form-control" placeholder="Contoh: Tang Kombinasi" required>
                     </div>
                     <div class="row mb-3">
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <label class="form-label">Kategori</label>
                             <input type="text" name="kategori" class="form-control" placeholder="e.g. Tools">
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <label class="form-label">Harga Beli (Rp)</label>
                             <input type="number" name="harga_beli" class="form-control" placeholder="e.g. 150000">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Tanggal Beli</label>
+                            <input type="date" name="tanggal_beli" class="form-control">
                         </div>
                     </div>
                     <div class="row mb-3">

@@ -25,6 +25,16 @@
 
                 <ul class="list-group list-group-flush">
                     <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>Tanggal Beli</span>
+                        <span class="fw-bold">
+                            @if($inventory->tanggal_beli)
+                            {{ \Carbon\Carbon::parse($inventory->tanggal_beli)->format('d/m/Y') }}
+                            @else
+                            -
+                            @endif
+                        </span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
                         <span>Harga Beli</span>
                         <span class="fw-bold text-success">
                             @if($inventory->harga_beli)
@@ -32,6 +42,12 @@
                             @else
                             -
                             @endif
+                        </span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>Total Harga</span>
+                        <span class="fw-bold text-success">
+                            Rp {{ number_format(($inventory->harga_beli ?? 0) * ($inventory->stok ?? 1), 0, ',', '.') }}
                         </span>
                     </li>
                     <li class="list-group-item d-flex justify-content-between align-items-center">

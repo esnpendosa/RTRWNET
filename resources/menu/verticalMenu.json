@@ -205,9 +205,9 @@
           "slug": "laporan.index"
         },
         {
-          "url": "/laporan/tagihan",
-          "name": "Laporan Keuangan",
-          "slug": "laporan.tagihan"
+          "url": "/laporan/rekap-pembayaran",
+          "name": "Rekap Pembayaran (Excel)",
+          "slug": "laporan.rekap-pembayaran"
         }
       ]
     }

@@ -97,6 +97,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('registrasi/{pelanggan}/send-to-group', [PelangganController::class, 'sendRegistrasiToGroup'])->name('pelanggan.registrasi.send-to-group');
         Route::get('/pelanggan/card-massal', [PelangganController::class, 'cardMassal'])->name('pelanggan.card-massal');
         Route::get('/pelanggan/export', [PelangganController::class, 'export'])->name('pelanggan.export');
+        Route::get('/pelanggan/get-next-code', [PelangganController::class, 'getNextCode'])->name('pelanggan.next-code');
         Route::get('/pelanggan/{pelanggan}/card', [PelangganController::class, 'card'])->name('pelanggan.card');
         Route::get('pelanggan/{pelanggan}/delete-direct', [PelangganController::class, 'destroyDirect'])->name('pelanggan.destroy-direct');
         Route::resource('pelanggan', PelangganController::class);
@@ -165,8 +166,8 @@ Route::middleware(['auth'])->group(function () {
     // Laporan
     Route::middleware('can:report_view')->group(function() {
         Route::get('laporan', [LaporanController::class, 'index'])->name('laporan.index');
-        Route::get('laporan/tagihan', [LaporanController::class, 'tagihan'])->name('laporan.tagihan');
-        Route::get('laporan/tagihan/export', [LaporanController::class, 'exportPdf'])->name('laporan.tagihan.export');
+        Route::get('laporan/rekap-pembayaran', [LaporanController::class, 'rekapPembayaran'])->name('laporan.rekap-pembayaran');
+        Route::get('laporan/rekap-pembayaran/export-excel', [LaporanController::class, 'exportExcel'])->name('laporan.rekap-pembayaran.export-excel');
     });
 
     // Profile (All can view)
@@ -176,6 +177,7 @@ Route::middleware(['auth'])->group(function () {
     // Billing (Handled by the public proxy route above)
 
     Route::get('billing/{tagihan}/pay', [\App\Http\Controllers\PaymentController::class, 'getSnapToken'])->name('billing.pay');
+    Route::post('billing', [\App\Http\Controllers\TagihanController::class, 'store'])->name('billing.store');
     Route::post('billing/{tagihan}/confirm', [\App\Http\Controllers\TagihanController::class, 'confirmPayment'])->name('billing.confirm');
     Route::post('billing/{tagihan}/verify', [\App\Http\Controllers\TagihanController::class, 'verifikasi'])->name('billing.verify');
     Route::get('billing/sync', [\App\Http\Controllers\TagihanController::class, 'generateMonthlyBills'])->name('billing.sync');

@@ -14,7 +14,7 @@ class PelangganController extends Controller
     public function index(Request $request)
     {
         $search = $request->query('search');
-        $query = Pelanggan::latest();
+        $query = Pelanggan::query();
 
         if ($search) {
             $query->where(function ($q) use ($search) {
@@ -24,7 +24,7 @@ class PelangganController extends Controller
             });
         }
 
-        $pelanggan = $query->get();
+        $pelanggan = $query->get()->sortBy('kode_pelanggan', SORT_NATURAL | SORT_FLAG_CASE)->values();
         return view('content.pelanggan.index', compact('pelanggan'));
     }
 
@@ -586,5 +586,49 @@ class PelangganController extends Controller
         } catch (\Exception $e) {
             return back()->with('error', 'Terjadi kesalahan: ' . $e->getMessage());
         }
+    }
+
+    public function getNextCode(Request $request)
+    {
+        $prefix = strtoupper(trim($request->query('prefix', '')));
+        
+        if (empty($prefix)) {
+            // Find the last created customer (excluding REG% and TRN-% which are temporary/random)
+            $lastPelanggan = Pelanggan::whereRaw("kode_pelanggan NOT REGEXP '^REG[0-9]+$'")
+                ->whereRaw("kode_pelanggan NOT REGEXP '^TRN-'")
+                ->latest('id_pelanggan')
+                ->first();
+                
+            if ($lastPelanggan) {
+                // Extract non-numeric prefix
+                preg_match('/^([a-zA-Z]+)/', $lastPelanggan->kode_pelanggan, $matches);
+                $prefix = isset($matches[1]) ? strtoupper($matches[1]) : 'PEL';
+            } else {
+                $prefix = 'PEL';
+            }
+        }
+        
+        // Find all customer codes starting with $prefix
+        $codes = Pelanggan::where('kode_pelanggan', 'like', $prefix . '%')
+            ->pluck('kode_pelanggan')
+            ->toArray();
+            
+        $maxNum = 0;
+        foreach ($codes as $code) {
+            // Extract the number part after the prefix
+            $numPart = substr($code, strlen($prefix));
+            if (is_numeric($numPart)) {
+                $maxNum = max($maxNum, (int)$numPart);
+            }
+        }
+        
+        $nextNum = $maxNum + 1;
+        $nextCode = $prefix . $nextNum;
+        
+        return response()->json([
+            'prefix' => $prefix,
+            'next_code' => $nextCode,
+            'next_number' => $nextNum
+        ]);
     }
 }
