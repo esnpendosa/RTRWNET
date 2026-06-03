@@ -159,9 +159,9 @@
                 <h5 class="mb-0">Daftar Tagihan Pelanggan</h5>
                 @if(auth()->user()->id_role == 1)
                 <div class="d-flex align-items-center gap-2">
-                    <a href="{{ route('billing.delete-all-direct') }}" class="btn btn-outline-danger btn-sm">
-                        <i class="bx bx-trash me-1" style="pointer-events: none;"></i> Kosongkan Semua
-                    </a>
+                    <button type="button" class="btn btn-outline-danger btn-sm" id="btnKosongkanSemua">
+                        <i class="bx bx-trash me-1"></i> Kosongkan Semua
+                    </button>
                     <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalTambahTagihan">
                         <i class="bx bx-plus me-1"></i> Input Tagihan Manual
                     </button>
@@ -719,10 +719,32 @@
 @endsection
 
 @section('page-script')
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
 <script src="{{ \App\Models\Setting::get('midtrans_is_production', '0') == '1' ? 'https://app.midtrans.com/snap/snap.js' : 'https://app.sandbox.midtrans.com/snap/snap.js' }}" data-client-key="{{ \App\Models\Setting::get('midtrans_client_key', config('services.midtrans.client_key')) }}"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // Kosongkan Semua confirmation dialog
+        const btnKosongkan = document.getElementById('btnKosongkanSemua');
+        if (btnKosongkan) {
+            btnKosongkan.addEventListener('click', function(e) {
+                e.preventDefault();
+                Swal.fire({
+                    title: 'Kosongkan Semua Tagihan?',
+                    text: "Seluruh data tagihan akan dihapus secara permanen dari database. Tindakan ini tidak dapat dibatalkan!",
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#ff3e1d',
+                    cancelButtonColor: '#8592a3',
+                    confirmButtonText: 'Ya, Kosongkan!',
+                    cancelButtonText: 'Batal'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        window.location.href = "{{ route('billing.delete-all-direct') }}";
+                    }
+                });
+            });
+        }
         if (document.getElementById('id_pelanggan')) {
             new TomSelect("#id_pelanggan", {
                 create: false,
