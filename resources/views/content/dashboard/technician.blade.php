@@ -160,12 +160,22 @@
                     <small class="text-muted">Semua keluhan lapangan Anda telah selesai ditangani.</small>
                 </div>
                 @else
+                <div class="px-3 pt-3">
+                    @php
+                        $baseLat = $teknisi->base_latitude != 0 ? $teknisi->base_latitude : -7.1593;
+                        $baseLng = $teknisi->base_longitude != 0 ? $teknisi->base_longitude : 112.6519;
+                    @endphp
+                    <a href="https://www.google.com/maps/dir/?api=1&origin={{ $baseLat }},{{ $baseLng }}&destination={{ $myTickets->last()->pelanggan->latitude }},{{ $myTickets->last()->pelanggan->longitude }}&waypoints={{ $myTickets->slice(0, -1)->map(function($t) { return $t->pelanggan->latitude . ',' . $t->pelanggan->longitude; })->implode('|') }}" target="_blank" class="btn btn-primary w-100 text-white shadow-sm">
+                        <i class="bx bx-map-alt me-1"></i> Navigasi Seluruh Rute Hari Ini
+                    </a>
+                </div>
                 <div class="list-group list-group-flush">
                     @foreach($myTickets as $ticket)
                     <div class="list-group-item p-3 border-bottom-0">
                         <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start gap-2 bg-light rounded p-3 shadow-sm border-start border-4 border-primary">
                             <div>
                                 <div class="d-flex align-items-center flex-wrap gap-2 mb-2">
+                                    <span class="badge bg-primary fw-bold"><i class="bx bx-map-pin me-1"></i>Rute #{{ $loop->iteration }}</span>
                                     <span class="badge bg-label-primary fw-bold">{{ $ticket->kode_tiket }}</span>
                                     <span class="badge bg-{{ $ticket->prioritas == 'High' ? 'danger' : ($ticket->prioritas == 'Medium' ? 'warning' : 'info') }}">{{ $ticket->prioritas }}</span>
                                     <span class="badge bg-label-info">{{ $ticket->status }}</span>
@@ -177,8 +187,12 @@
                                 </p>
                             </div>
                             <div class="mt-2 mt-sm-0 flex-shrink-0 d-flex gap-2 w-100 w-sm-auto justify-content-end">
-                                <a href="https://www.google.com/maps/dir/?api=1&destination={{ $ticket->pelanggan->latitude }},{{ $ticket->pelanggan->longitude }}" target="_blank" class="btn btn-sm btn-outline-secondary">
-                                    <i class="bx bx-navigation me-1"></i> Map
+                                @php
+                                    $originLat = $loop->first ? ($teknisi->base_latitude != 0 ? $teknisi->base_latitude : -7.1593) : $myTickets[$loop->index - 1]->pelanggan->latitude;
+                                    $originLng = $loop->first ? ($teknisi->base_longitude != 0 ? $teknisi->base_longitude : 112.6519) : $myTickets[$loop->index - 1]->pelanggan->longitude;
+                                @endphp
+                                <a href="https://www.google.com/maps/dir/?api=1&origin={{ $originLat }},{{ $originLng }}&destination={{ $ticket->pelanggan->latitude }},{{ $ticket->pelanggan->longitude }}" target="_blank" class="btn btn-sm btn-outline-secondary">
+                                    <i class="bx bx-navigation me-1"></i> Navigasi
                                 </a>
                                 <a href="{{ route('tiket.show', $ticket->id_tiket) }}" class="btn btn-sm btn-primary">
                                     <i class="bx bx-chat me-1"></i> Detail / Chat

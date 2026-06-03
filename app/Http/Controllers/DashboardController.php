@@ -54,14 +54,24 @@ class DashboardController extends Controller
                 ->latest()
                 ->get();
 
-            // Optimize Route
-            $pelangganHigh = Pelanggan::whereIn('prioritas_label', ['High', 'Medium'])
-                ->whereHas('tiket', function($q) {
-                    $q->where('status', 'Open');
-                })->get()->toArray();
+            // Optimize Route (specifically for technician's assigned tickets)
+            $pelangganHigh = $myTickets->map(function($ticket) {
+                $p = $ticket->pelanggan;
+                if ($p) {
+                    $p->prioritas_label = $ticket->prioritas;
+                }
+                return $p;
+            })->filter()->values()->toArray();
 
             $routeService = app(\App\Services\RouteOptimizationService::class);
             $optimizedRoute = $routeService->optimize($teknisi->base_latitude, $teknisi->base_longitude, $pelangganHigh);
+            
+            // Sort myTickets based on the optimized route order
+            $optimizedIdOrder = collect($optimizedRoute['route'])->pluck('id_pelanggan')->toArray();
+            $myTickets = $myTickets->sortBy(function($ticket) use ($optimizedIdOrder) {
+                $pos = array_search($ticket->id_pelanggan, $optimizedIdOrder);
+                return $pos !== false ? $pos : 999;
+            })->values();
             
             $routers = Router::all();
             
