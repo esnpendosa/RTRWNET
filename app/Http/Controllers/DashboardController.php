@@ -140,15 +140,13 @@ class DashboardController extends Controller
         ];
 
         // 4. Calculate dynamic Assets & Advance Advances (Kas Bon)
-        $totalInventoryValue = \App\Models\InventoryItem::all()->sum(function($item) {
-            return ($item->harga_beli ?? 0) * ($item->stok ?? 1);
-        });
+        $totalInventoryValue = \App\Models\InventoryItem::sum('harga_beli');
         $totalInventoryItems = \App\Models\InventoryItem::count();
         
         $totalKasBonOutstanding = 0;
         try {
             if (\Illuminate\Support\Facades\Schema::hasTable('kas_bon')) {
-                $totalKasBonOutstanding = \App\Models\KasBon::where('status', 'belum_lunas')->sum('amount');
+                $totalKasBonOutstanding = \App\Models\KasBon::where('status', 'belum_lunas')->sum('jumlah');
             }
         } catch (\Exception $e) {}
 

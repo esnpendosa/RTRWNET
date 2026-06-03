@@ -35,19 +35,23 @@
                         </span>
                     </li>
                     <li class="list-group-item d-flex justify-content-between align-items-center">
-                        <span>Harga Beli</span>
+                        <span>Harga Satuan</span>
                         <span class="fw-bold text-success">
                             @if($inventory->harga_beli)
-                            Rp {{ number_format($inventory->harga_beli, 0, ',', '.') }}
+                            Rp {{ number_format($inventory->harga_beli / ($inventory->stok ?: 1), 0, ',', '.') }}
                             @else
                             -
                             @endif
                         </span>
                     </li>
                     <li class="list-group-item d-flex justify-content-between align-items-center">
-                        <span>Total Harga</span>
+                        <span>Total Harga Beli</span>
                         <span class="fw-bold text-success">
-                            Rp {{ number_format(($inventory->harga_beli ?? 0) * ($inventory->stok ?? 1), 0, ',', '.') }}
+                            @if($inventory->harga_beli)
+                            Rp {{ number_format($inventory->harga_beli, 0, ',', '.') }}
+                            @else
+                            -
+                            @endif
                         </span>
                     </li>
                     <li class="list-group-item d-flex justify-content-between align-items-center">
