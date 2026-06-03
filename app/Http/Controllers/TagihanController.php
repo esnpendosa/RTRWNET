@@ -107,8 +107,14 @@ class TagihanController extends Controller
             });
         }
 
-        $tagihan = $query->latest()->get();
-        $allPelanggan = Pelanggan::where('is_active', true)->orderBy('nama_pelanggan')->get();
+        $tagihan = $query->get()->sortBy(function($t) {
+            $code = $t->pelanggan->kode_pelanggan ?? '';
+            $year = sprintf('%04d', $t->tahun);
+            $month = sprintf('%02d', $t->bulan);
+            return "{$code}_{$year}_{$month}";
+        }, SORT_NATURAL | SORT_FLAG_CASE)->values();
+
+        $allPelanggan = Pelanggan::where('is_active', true)->get()->sortBy('kode_pelanggan', SORT_NATURAL | SORT_FLAG_CASE)->values();
         return view('content.billing.index', compact('tagihan', 'allPelanggan'));
     }
 

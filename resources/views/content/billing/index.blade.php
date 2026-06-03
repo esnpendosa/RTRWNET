@@ -294,7 +294,7 @@
                                 <select name="id_pelanggan" id="id_pelanggan" class="form-select">
                                     <option value="">-- Pilih Pelanggan --</option>
                                     @foreach($allPelanggan as $p)
-                                    <option value="{{ $p->id_pelanggan }}">{{ $p->nama_pelanggan }} ({{ $p->kode_pelanggan }})</option>
+                                    <option value="{{ $p->id_pelanggan }}">[{{ $p->kode_pelanggan }}] {{ $p->nama_pelanggan }}</option>
                                     @endforeach
                                 </select>
                             </div>
@@ -340,7 +340,7 @@
                             <select name="id_pelanggan" id="tambah_id_pelanggan" class="form-select" required onchange="updateDefaultJumlah()">
                                 <option value="">-- Pilih Pelanggan --</option>
                                 @foreach($allPelanggan as $p)
-                                <option value="{{ $p->id_pelanggan }}" data-harga="{{ $p->harga_layanan }}">{{ $p->nama_pelanggan }} ({{ $p->kode_pelanggan }}) - Rp{{ number_format($p->harga_layanan, 0, ',', '.') }}</option>
+                                <option value="{{ $p->id_pelanggan }}" data-harga="{{ $p->harga_layanan }}">[{{ $p->kode_pelanggan }}] {{ $p->nama_pelanggan }} - Rp{{ number_format($p->harga_layanan, 0, ',', '.') }}</option>
                                 @endforeach
                             </select>
                         </div>
