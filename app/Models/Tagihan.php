@@ -24,10 +24,12 @@ class Tagihan extends Model
         'snap_token',
         'payment_url',
         'paid_at',
+        'bayar_di_awal',
     ];
 
     protected $casts = [
         'paid_at' => 'datetime',
+        'bayar_di_awal' => 'boolean',
     ];
 
     public function pelanggan()

@@ -56,6 +56,8 @@ class PelangganController extends Controller
             'billing_date' => 'required|integer|min:1|max:28',
             'wa_active' => 'required|boolean',
             'foto_rumah' => 'nullable|file|max:5120',
+            'tanggal_pasang' => 'nullable|date',
+            'gratis_pemasangan' => 'nullable|boolean',
         ]);
 
         $fotoPath = null;
@@ -77,6 +79,7 @@ class PelangganController extends Controller
         }
 
         $validated['foto_rumah'] = $fotoPath;
+        $validated['gratis_pemasangan'] = $request->has('gratis_pemasangan');
         $pelanggan = Pelanggan::create($validated);
 
         // Auto-create User account
@@ -133,6 +136,8 @@ class PelangganController extends Controller
             'wa_active' => 'required|boolean',
             'billing_date' => 'required|integer|min:1|max:28',
             'foto_rumah' => 'nullable|file|max:5120',
+            'tanggal_pasang' => 'nullable|date',
+            'gratis_pemasangan' => 'nullable|boolean',
         ]);
 
         if ($request->hasFile('foto_rumah')) {
@@ -160,6 +165,7 @@ class PelangganController extends Controller
             }
         }
 
+        $validated['gratis_pemasangan'] = $request->has('gratis_pemasangan');
         $pelanggan->update($validated);
 
         // Sync with User account if email changed

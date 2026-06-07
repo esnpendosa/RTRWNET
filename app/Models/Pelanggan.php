@@ -36,6 +36,8 @@ class Pelanggan extends Model
         'last_ping_at',
         'billing_date',
         'foto_rumah',
+        'tanggal_pasang',
+        'gratis_pemasangan',
     ];
 
     public function user()
@@ -74,5 +76,33 @@ class Pelanggan extends Model
             default:
                 return "Paket {$hargaK}";
         }
+    }
+
+    public function isBulanGratis($month, $year)
+    {
+        if (!$this->gratis_pemasangan) {
+            return false;
+        }
+
+        $tanggalPasang = $this->tanggal_pasang ?: $this->created_at;
+        if (!$tanggalPasang) {
+            return false;
+        }
+
+        $carbonPasang = \Carbon\Carbon::parse($tanggalPasang);
+        $pasangDay = $carbonPasang->day;
+
+        // Bonus gratis pemasangan jika dibawah tgl 27 terhitung di bulan pemasangan, dan jika diatas tgl 27 gratis terhitung mulai bulan depan
+        if ($pasangDay < 27) {
+            $freeStart = $carbonPasang->copy()->startOfMonth();
+            $freeEnd = $carbonPasang->copy()->addMonth()->endOfMonth();
+        } else {
+            $freeStart = $carbonPasang->copy()->addMonth()->startOfMonth();
+            $freeEnd = $carbonPasang->copy()->addMonths(2)->endOfMonth();
+        }
+
+        $targetDate = \Carbon\Carbon::createFromDate($year, $month, 1)->startOfMonth();
+
+        return $targetDate->between($freeStart, $freeEnd);
     }
 }

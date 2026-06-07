@@ -370,6 +370,13 @@
                                 <option value="pending">Pending / Menunggu Verifikasi</option>
                             </select>
                         </div>
+                        <div class="mb-3">
+                            <div class="form-check form-switch mt-2">
+                                <input class="form-check-input" type="checkbox" name="bayar_di_awal" id="tambah_bayar_di_awal" value="1">
+                                <label class="form-check-label" for="tambah_bayar_di_awal">Bayar di Awal (Bulan Selanjutnya)</label>
+                            </div>
+                            <small class="text-muted">Centang jika ini adalah pembayaran di awal untuk bulan selanjutnya agar tidak dihitung sebagai pemasukan bulan tersebut.</small>
+                        </div>
                         <div id="tambahPaidSection" style="display: none;">
                             <div class="mb-3">
                                 <label class="form-label">Metode Pembayaran</label>
@@ -442,6 +449,9 @@
                     <td>
                         @if($t->status == 'paid')
                             <span class="badge bg-label-success">Lunas</span>
+                            @if($t->bayar_di_awal)
+                                <span class="badge bg-label-info ms-1">Bayar di Awal</span>
+                            @endif
                             <br><small class="text-muted">{{ $t->paid_at }} via {{ $t->metode_pembayaran ?? 'System' }}</small>
                             @if($t->bukti_bayar && file_exists(storage_path('app/public/' . $t->bukti_bayar)))
                                 <br><a href="{{ asset('storage/' . $t->bukti_bayar) }}" target="_blank" class="small text-info"><i class='bx bx-image-alt'></i> Lihat Bukti TF</a>
@@ -694,6 +704,13 @@
                                     <option value="pending" {{ $t->status == 'pending' ? 'selected' : '' }}>Pending</option>
                                     <option value="cancelled" {{ $t->status == 'cancelled' ? 'selected' : '' }}>Dibatalkan</option>
                                 </select>
+                            </div>
+                            <div class="col-12 mt-2">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="bayar_di_awal" id="edit_bayar_di_awal{{ $t->id_tagihan }}" value="1" {{ $t->bayar_di_awal ? 'checked' : '' }}>
+                                    <label class="form-check-label" for="edit_bayar_di_awal{{ $t->id_tagihan }}">Bayar di Awal (Bulan Selanjutnya)</label>
+                                </div>
+                                <small class="text-muted">Centang jika ini adalah pembayaran di awal untuk bulan selanjutnya agar tidak dihitung sebagai pemasukan bulan tersebut.</small>
                             </div>
                             <div class="col-12" id="paidAtSection{{ $t->id_tagihan }}" style="{{ $t->status == 'paid' ? '' : 'display:none' }}">
                                 <label class="form-label">Waktu Pembayaran (Paid At)</label>

@@ -143,10 +143,12 @@ class TagihanController extends Controller
         }
 
         $data = $request->only(['id_pelanggan', 'bulan', 'tahun', 'jumlah', 'status', 'metode_pembayaran', 'paid_at', 'catatan_admin']);
+        $data['bayar_di_awal'] = $request->has('bayar_di_awal');
 
         if ($data['status'] !== 'paid') {
             $data['paid_at'] = null;
             $data['metode_pembayaran'] = null;
+            $data['bayar_di_awal'] = false;
         }
 
         $tagihan = Tagihan::create($data);
@@ -201,10 +203,17 @@ class TagihanController extends Controller
         ]);
 
         $oldStatus = $tagihan->status;
-        $tagihan->update($request->all());
+        $data = $request->all();
+        $data['bayar_di_awal'] = $request->has('bayar_di_awal');
+        
+        if ($data['status'] !== 'paid') {
+            $data['bayar_di_awal'] = false;
+        }
+
+        $tagihan->update($data);
 
         if ($oldStatus !== 'paid' && $tagihan->status === 'paid') {
-            $tagihan->update(['paid_at' => now()]);
+            $tagihan->update(['paid_at' => $tagihan->paid_at ?? now()]);
             
             $pelanggan = $tagihan->pelanggan;
             if ($pelanggan && $pelanggan->id_router) {
@@ -360,37 +369,68 @@ class TagihanController extends Controller
                 ->exists();
 
             if (!$exists && $p->harga_layanan > 0) {
-                Tagihan::create([
-                    'id_pelanggan' => $p->id_pelanggan,
-                    'bulan' => $currentMonth,
-                    'tahun' => $currentYear,
-                    'jumlah' => $p->harga_layanan,
-                    'status' => 'unpaid',
-                    'created_at' => $request->created_at ?? now(),
-                ]);
-                $generatedCount++;
+                if ($p->isBulanGratis($currentMonth, $currentYear)) {
+                    Tagihan::create([
+                        'id_pelanggan' => $p->id_pelanggan,
+                        'bulan' => $currentMonth,
+                        'tahun' => $currentYear,
+                        'jumlah' => 0,
+                        'status' => 'paid',
+                        'metode_pembayaran' => 'Bonus Gratis',
+                        'paid_at' => $request->created_at ?? now(),
+                        'catatan_admin' => 'Bonus Gratis Pemasangan (2 Bulan Pertama)',
+                        'created_at' => $request->created_at ?? now(),
+                    ]);
+                    $generatedCount++;
 
-                // Kirim Notifikasi WA jika nomor WA ada dan aktif secara global serta aktif per pelanggan
-                if ($p->no_wa && $p->wa_active && \App\Models\Setting::get('wa_billing_notification_enabled', '1') == '1') {
-                    try {
-                        $monthName = date('F', mktime(0, 0, 0, $currentMonth, 10));
-                        $message = "🔔 *PEMBERITAHUAN TAGIHAN BARU*\n\n";
-                        $message .= "Halo *" . $p->kode_pelanggan . "* " . $p->nama_pelanggan . ",\n\n";
-                        $message .= "Tagihan internet Anda untuk periode *" . $monthName . " " . $currentYear . "* telah terbit pembayaran maximal per tgl 10.\n\n";
-                        $message .= "Jumlah: *Rp " . number_format($p->harga_layanan) . "*\n";
-                        $message .= "Status: *BELUM BAYAR*\n\n";
-                        $message .= "Silakan lakukan pembayaran agar layanan tetap aktif.\n";
-                        $message .= "Ketik *Cek Tagihan* untuk melihat detail pembayaran.\n\n";
-                        $message .= "Pembayaran Melalui Rekening  :\n";
-                        $message .= "BRI = 621001017663537\n";
-                        $message .= "BCA = 7415234155\n";
-                        $message .= "Dana = 082187827382\n\n";
-                        $message .= "Semua AN/ FACHRUR ROZI\n\n";
-                        $message .= "Setelah Melakukan Pembayaran Silahkan Screenshoot / Konfirmasi Pembayaran Melalui Whatsapp wa.me/+6285604118932";
+                    // Kirim Notifikasi WA Promo Gratis
+                    if ($p->no_wa && $p->wa_active && \App\Models\Setting::get('wa_billing_notification_enabled', '1') == '1') {
+                        try {
+                            $monthName = date('F', mktime(0, 0, 0, $currentMonth, 10));
+                            $message = "🎉 *PROMO BONUS GRATIS LAYANAN*\n\n";
+                            $message .= "Halo *" . $p->kode_pelanggan . "* " . $p->nama_pelanggan . ",\n\n";
+                            $message .= "Tagihan internet Anda untuk periode *" . $monthName . " " . $currentYear . "* telah terbit.\n\n";
+                            $message .= "Status: *LUNAS (PROMO GRATIS)*\n";
+                            $message .= "Jumlah Tagihan: *Rp 0*\n\n";
+                            $message .= "Terima kasih telah memilih layanan internet kami! Nikmati koneksi Anda nggih.";
+                            $waClient->sendMessage($p->no_wa, ['text' => $message]);
+                        } catch (\Exception $e) {
+                            \Illuminate\Support\Facades\Log::error('Gagal kirim notifikasi tagihan gratis: ' . $e->getMessage());
+                        }
+                    }
+                } else {
+                    Tagihan::create([
+                        'id_pelanggan' => $p->id_pelanggan,
+                        'bulan' => $currentMonth,
+                        'tahun' => $currentYear,
+                        'jumlah' => $p->harga_layanan,
+                        'status' => 'unpaid',
+                        'created_at' => $request->created_at ?? now(),
+                    ]);
+                    $generatedCount++;
 
-                        $waClient->sendMessage($p->no_wa, ['text' => $message]);
-                    } catch (\Exception $e) {
-                        \Illuminate\Support\Facades\Log::error('Gagal kirim notifikasi tagihan baru: ' . $e->getMessage());
+                    // Kirim Notifikasi WA jika nomor WA ada dan aktif secara global serta aktif per pelanggan
+                    if ($p->no_wa && $p->wa_active && \App\Models\Setting::get('wa_billing_notification_enabled', '1') == '1') {
+                        try {
+                            $monthName = date('F', mktime(0, 0, 0, $currentMonth, 10));
+                            $message = "🔔 *PEMBERITAHUAN TAGIHAN BARU*\n\n";
+                            $message .= "Halo *" . $p->kode_pelanggan . "* " . $p->nama_pelanggan . ",\n\n";
+                            $message .= "Tagihan internet Anda untuk periode *" . $monthName . " " . $currentYear . "* telah terbit pembayaran maximal per tgl 10.\n\n";
+                            $message .= "Jumlah: *Rp " . number_format($p->harga_layanan) . "*\n";
+                            $message .= "Status: *BELUM BAYAR*\n\n";
+                            $message .= "Silakan lakukan pembayaran agar layanan tetap aktif.\n";
+                            $message .= "Ketik *Cek Tagihan* untuk melihat detail pembayaran.\n\n";
+                            $message .= "Pembayaran Melalui Rekening  :\n";
+                            $message .= "BRI = 621001017663537\n";
+                            $message .= "BCA = 7415234155\n";
+                            $message .= "Dana = 082187827382\n\n";
+                            $message .= "Semua AN/ FACHRUR ROZI\n\n";
+                            $message .= "Setelah Melakukan Pembayaran Silahkan Screenshoot / Konfirmasi Pembayaran Melalui Whatsapp wa.me/+6285604118932";
+
+                            $waClient->sendMessage($p->no_wa, ['text' => $message]);
+                        } catch (\Exception $e) {
+                            \Illuminate\Support\Facades\Log::error('Gagal kirim notifikasi tagihan baru: ' . $e->getMessage());
+                        }
                     }
                 }
             }

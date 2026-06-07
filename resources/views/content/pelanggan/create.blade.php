@@ -120,6 +120,19 @@
             </select>
             <small class="text-muted">Tagihan otomatis dibuat setiap bulan pada tanggal ini.</small>
         </div>
+        <div class="col-md-6 mb-3">
+            <label class="form-label">Tanggal Pasang (PSB)</label>
+            <input type="date" name="tanggal_pasang" class="form-control" value="{{ date('Y-m-d') }}" />
+            <small class="text-muted">Tanggal pemasangan internet baru.</small>
+        </div>
+        <div class="col-md-6 mb-3">
+            <label class="form-label d-block">Opsi Bonus Gratis Pemasangan</label>
+            <div class="form-check form-switch mt-2">
+                <input class="form-check-input" type="checkbox" name="gratis_pemasangan" id="gratis_pemasangan" value="1">
+                <label class="form-check-label" for="gratis_pemasangan">Aktifkan Bonus Gratis Layanan 2 Bulan Pertama</label>
+            </div>
+            <small class="text-muted">Jika diaktifkan, 2 bulan pertama gratis (Jika pasang &lt; tgl 27, gratis terhitung bulan ini. Jika &gt;= tgl 27, gratis mulai bulan depan).</small>
+        </div>
       </div>
       <button type="submit" class="btn btn-primary">Simpan</button>
     </form>

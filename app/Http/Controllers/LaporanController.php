@@ -32,14 +32,28 @@ class LaporanController extends Controller
             });
         }
 
-        // Filter by Month
-        if ($request->month) {
-            $query->where('bulan', $request->month);
-        }
-
-        // Filter by Year
-        if ($request->year) {
-            $query->where('tahun', $request->year);
+        // Filter by Month and Year
+        if ($request->month && $request->year) {
+            $m = $request->month;
+            $y = $request->year;
+            $query->where(function($q) use ($m, $y) {
+                $q->where(function($sub) use ($m, $y) {
+                    $sub->where('bulan', $m)
+                        ->where('tahun', $y)
+                        ->where('bayar_di_awal', false);
+                })->orWhere(function($sub) use ($m, $y) {
+                    $sub->where('bayar_di_awal', true)
+                        ->whereMonth('paid_at', $m)
+                        ->whereYear('paid_at', $y);
+                });
+            });
+        } else {
+            if ($request->month) {
+                $query->where('bulan', $request->month);
+            }
+            if ($request->year) {
+                $query->where('tahun', $request->year);
+            }
         }
 
         // Filter by Status
@@ -100,8 +114,24 @@ class LaporanController extends Controller
                   ->orWhere('kode_pelanggan', 'like', "%{$search}%");
             });
         }
-        if ($request->month) $query->where('bulan', $request->month);
-        if ($request->year) $query->where('tahun', $request->year);
+        if ($request->month && $request->year) {
+            $m = $request->month;
+            $y = $request->year;
+            $query->where(function($q) use ($m, $y) {
+                $q->where(function($sub) use ($m, $y) {
+                    $sub->where('bulan', $m)
+                        ->where('tahun', $y)
+                        ->where('bayar_di_awal', false);
+                })->orWhere(function($sub) use ($m, $y) {
+                    $sub->where('bayar_di_awal', true)
+                        ->whereMonth('paid_at', $m)
+                        ->whereYear('paid_at', $y);
+                });
+            });
+        } else {
+            if ($request->month) $query->where('bulan', $request->month);
+            if ($request->year) $query->where('tahun', $request->year);
+        }
         if ($request->status) $query->where('status', $request->status);
         if ($request->metode_pembayaran) $query->where('metode_pembayaran', $request->metode_pembayaran);
         if ($request->start_date && $request->end_date) {

@@ -132,6 +132,47 @@ class DashboardController extends Controller
         $currentMonth = now()->month;
         $currentYear = now()->year;
 
+        $total_pendapatan = \App\Models\Tagihan::where('status', 'paid')
+            ->where(function($q) use ($currentMonth, $currentYear) {
+                $q->where(function($sub) use ($currentMonth, $currentYear) {
+                    $sub->where('bulan', $currentMonth)
+                        ->where('tahun', $currentYear)
+                        ->where('bayar_di_awal', false);
+                })->orWhere(function($sub) use ($currentMonth, $currentYear) {
+                    $sub->where('bayar_di_awal', true)
+                        ->whereMonth('paid_at', $currentMonth)
+                        ->whereYear('paid_at', $currentYear);
+                });
+            })->sum('jumlah');
+
+        $total_pendapatan_cash = \App\Models\Tagihan::where('status', 'paid')
+            ->where('metode_pembayaran', 'Cash')
+            ->where(function($q) use ($currentMonth, $currentYear) {
+                $q->where(function($sub) use ($currentMonth, $currentYear) {
+                    $sub->where('bulan', $currentMonth)
+                        ->where('tahun', $currentYear)
+                        ->where('bayar_di_awal', false);
+                })->orWhere(function($sub) use ($currentMonth, $currentYear) {
+                    $sub->where('bayar_di_awal', true)
+                        ->whereMonth('paid_at', $currentMonth)
+                        ->whereYear('paid_at', $currentYear);
+                });
+            })->sum('jumlah');
+
+        $total_pendapatan_transfer = \App\Models\Tagihan::where('status', 'paid')
+            ->where('metode_pembayaran', '!=', 'Cash')
+            ->where(function($q) use ($currentMonth, $currentYear) {
+                $q->where(function($sub) use ($currentMonth, $currentYear) {
+                    $sub->where('bulan', $currentMonth)
+                        ->where('tahun', $currentYear)
+                        ->where('bayar_di_awal', false);
+                })->orWhere(function($sub) use ($currentMonth, $currentYear) {
+                    $sub->where('bayar_di_awal', true)
+                        ->whereMonth('paid_at', $currentMonth)
+                        ->whereYear('paid_at', $currentYear);
+                });
+            })->sum('jumlah');
+
         $stats = [
             'total_pelanggan' => Pelanggan::count(),
             'total_gangguan' => TiketGangguan::where('status', 'Open')->count(),
@@ -140,9 +181,9 @@ class DashboardController extends Controller
             'total_router' => Router::count(),
             'tagihan_lunas' => \App\Models\Tagihan::where('status', 'paid')->where('bulan', $currentMonth)->where('tahun', $currentYear)->count(),
             'tagihan_unpaid' => \App\Models\Tagihan::where('status', 'unpaid')->where('bulan', $currentMonth)->where('tahun', $currentYear)->count(),
-            'total_pendapatan' => \App\Models\Tagihan::where('status', 'paid')->where('bulan', $currentMonth)->where('tahun', $currentYear)->sum('jumlah'),
-            'total_pendapatan_cash' => \App\Models\Tagihan::where('status', 'paid')->where('metode_pembayaran', 'Cash')->where('bulan', $currentMonth)->where('tahun', $currentYear)->sum('jumlah'),
-            'total_pendapatan_transfer' => \App\Models\Tagihan::where('status', 'paid')->where('metode_pembayaran', '!=', 'Cash')->where('bulan', $currentMonth)->where('tahun', $currentYear)->sum('jumlah'),
+            'total_pendapatan' => $total_pendapatan,
+            'total_pendapatan_cash' => $total_pendapatan_cash,
+            'total_pendapatan_transfer' => $total_pendapatan_transfer,
             'total_tagihan_lunas' => \App\Models\Tagihan::where('status', 'paid')->count(),
             'total_tagihan_unpaid' => \App\Models\Tagihan::where('status', 'unpaid')->count(),
             'total_pengeluaran' => \App\Models\Keuangan::where('tipe', 'pengeluaran')->sum('jumlah'),
