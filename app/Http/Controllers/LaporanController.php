@@ -39,8 +39,7 @@ class LaporanController extends Controller
             $query->where(function($q) use ($m, $y) {
                 $q->where(function($sub) use ($m, $y) {
                     $sub->where('bulan', $m)
-                        ->where('tahun', $y)
-                        ->where('bayar_di_awal', false);
+                        ->where('tahun', $y);
                 })->orWhere(function($sub) use ($m, $y) {
                     $sub->where('bayar_di_awal', true)
                         ->whereMonth('paid_at', $m)
@@ -72,6 +71,22 @@ class LaporanController extends Controller
         }
 
         $tagihan = $query->orderBy('updated_at', 'desc')->get();
+
+        // Adjust amount to 0 for bills paid in advance in a different month
+        if ($request->month && $request->year) {
+            $m = (int) $request->month;
+            $y = (int) $request->year;
+            foreach ($tagihan as $t) {
+                if ($t->bayar_di_awal && $t->paid_at) {
+                    $paidMonth = (int) $t->paid_at->format('n');
+                    $paidYear = (int) $t->paid_at->format('Y');
+                    if ($paidMonth !== $m || $paidYear !== $y) {
+                        $t->original_jumlah = $t->jumlah;
+                        $t->jumlah = 0;
+                    }
+                }
+            }
+        }
 
         // Calculate Totals
         $total_pembayaran = $tagihan->sum('jumlah');
@@ -120,8 +135,7 @@ class LaporanController extends Controller
             $query->where(function($q) use ($m, $y) {
                 $q->where(function($sub) use ($m, $y) {
                     $sub->where('bulan', $m)
-                        ->where('tahun', $y)
-                        ->where('bayar_di_awal', false);
+                        ->where('tahun', $y);
                 })->orWhere(function($sub) use ($m, $y) {
                     $sub->where('bayar_di_awal', true)
                         ->whereMonth('paid_at', $m)
@@ -139,6 +153,21 @@ class LaporanController extends Controller
         }
 
         $tagihan = $query->orderBy('updated_at', 'desc')->get();
+
+        // Adjust amount to 0 for bills paid in advance in a different month
+        if ($request->month && $request->year) {
+            $m = (int) $request->month;
+            $y = (int) $request->year;
+            foreach ($tagihan as $t) {
+                if ($t->bayar_di_awal && $t->paid_at) {
+                    $paidMonth = (int) $t->paid_at->format('n');
+                    $paidYear = (int) $t->paid_at->format('Y');
+                    if ($paidMonth !== $m || $paidYear !== $y) {
+                        $t->jumlah = 0;
+                    }
+                }
+            }
+        }
 
         $headers = [
             "Content-type"        => "text/csv",

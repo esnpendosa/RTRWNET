@@ -492,6 +492,16 @@ class TagihanController extends Controller
             'catatan_admin' => $request->catatan_admin
         ]);
 
+        // Log the activity
+        try {
+            \App\Helpers\ActivityLogger::log(
+                'Memverifikasi manual pembayaran tagihan #' . $tagihan->id_tagihan . ' (' . ($tagihan->pelanggan ? $tagihan->pelanggan->nama_pelanggan : 'Umum') . ') sebesar Rp ' . number_format($tagihan->jumlah, 0, ',', '.') . ($tagihan->metode_pembayaran ? ' via ' . $tagihan->metode_pembayaran : ''),
+                'tagihan'
+            );
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("Gagal mencatat log aktivitas verifikasi manual: " . $e->getMessage());
+        }
+
         $pelanggan = $tagihan->pelanggan;
         if ($pelanggan && $pelanggan->id_router) {
             $mikrotikService = app(\App\Services\MikrotikService::class);

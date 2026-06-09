@@ -102,11 +102,11 @@ class PaymentController extends Controller
                 if ($fraud == 'challenge') {
                     $tagihan->update(['status' => 'unpaid']);
                 } else {
-                    $this->markAsPaid($tagihan);
+                    $this->markAsPaid($tagihan, 'Midtrans (' . $type . ')');
                 }
             }
         } else if ($transaction == 'settlement') {
-            $this->markAsPaid($tagihan);
+            $this->markAsPaid($tagihan, 'Midtrans (' . $type . ')');
         } else if ($transaction == 'pending') {
             $tagihan->update(['status' => 'unpaid']);
         } else if ($transaction == 'deny' || $transaction == 'expire' || $transaction == 'cancel') {
@@ -130,12 +130,25 @@ class PaymentController extends Controller
         return view('content.payment.quick_pay', compact('pelanggan', 'tagihan'));
     }
 
-    protected function markAsPaid(Tagihan $tagihan)
+    protected function markAsPaid(Tagihan $tagihan, $paymentType = 'Midtrans')
     {
         $tagihan->update([
             'status' => 'paid',
-            'paid_at' => now()
+            'paid_at' => now(),
+            'metode_pembayaran' => $paymentType
         ]);
+
+        // Log the activity
+        try {
+            \App\Helpers\ActivityLogger::log(
+                'Sistem (Midtrans) berhasil memverifikasi otomatis tagihan #' . $tagihan->id_tagihan . ' (' . ($tagihan->pelanggan ? $tagihan->pelanggan->nama_pelanggan : 'Umum') . ') sebesar Rp ' . number_format($tagihan->jumlah, 0, ',', '.') . ' via ' . $paymentType,
+                'tagihan',
+                'Midtrans Gateway',
+                'System'
+            );
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("Gagal mencatat log aktivitas verifikasi otomatis Midtrans: " . $e->getMessage());
+        }
 
         $pelanggan = $tagihan->pelanggan;
         if ($pelanggan && $pelanggan->id_router) {

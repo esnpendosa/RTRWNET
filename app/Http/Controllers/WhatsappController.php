@@ -645,6 +645,18 @@ class WhatsappController extends Controller
         if ($isValidReceipt) {
             $tagihan->update(['status' => 'paid', 'paid_at' => now(), 'metode_pembayaran' => 'otomatis']);
             
+            // Log the activity
+            try {
+                \App\Helpers\ActivityLogger::log(
+                    'Sistem (WhatsApp Bot) berhasil memverifikasi otomatis tagihan #' . $tagihan->id_tagihan . ' (' . ($tagihan->pelanggan ? $tagihan->pelanggan->nama_pelanggan : 'Umum') . ') sebesar Rp ' . number_format($tagihan->jumlah, 0, ',', '.'),
+                    'tagihan',
+                    'WhatsApp Bot',
+                    'System'
+                );
+            } catch (\Exception $e) {
+                \Log::error("Gagal mencatat log aktivitas verifikasi otomatis WhatsApp: " . $e->getMessage());
+            }
+            
             // Auto Re-Enable Layanan (Un-Isolir)
             $pelanggan = $tagihan->pelanggan;
             if ($pelanggan && $pelanggan->id_router) {

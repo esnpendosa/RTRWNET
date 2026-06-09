@@ -32,6 +32,21 @@ class Tagihan extends Model
         'bayar_di_awal' => 'boolean',
     ];
 
+    protected static function booted()
+    {
+        static::saving(function ($tagihan) {
+            if ($tagihan->status === 'paid' && $tagihan->paid_at) {
+                $paidDate = \Carbon\Carbon::parse($tagihan->paid_at);
+                $paidYearMonth = $paidDate->format('Y-m');
+                $billYearMonth = sprintf('%04d-%02d', $tagihan->tahun, $tagihan->bulan);
+                
+                if ($paidYearMonth < $billYearMonth) {
+                    $tagihan->bayar_di_awal = true;
+                }
+            }
+        });
+    }
+
     public function pelanggan()
     {
         return $this->belongsTo(Pelanggan::class, 'id_pelanggan', 'id_pelanggan');

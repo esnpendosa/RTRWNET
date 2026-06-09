@@ -260,7 +260,12 @@
                     <td class="fw-bold text-dark">{{ $t->pelanggan->kode_pelanggan }}</td>
                     <td>{{ $t->pelanggan->nama_pelanggan }}</td>
                     <td>{{ date('F', mktime(0, 0, 0, $t->bulan, 10)) }} {{ $t->tahun }}</td>
-                    <td class="number-col text-dark font-monospace fw-semibold">Rp {{ number_format($t->jumlah, 0, ',', '.') }}</td>
+                    <td class="number-col text-dark font-monospace fw-semibold">
+                        Rp {{ number_format($t->jumlah, 0, ',', '.') }}
+                        @if(isset($t->original_jumlah) && $t->original_jumlah > 0 && $t->jumlah == 0)
+                            <br><small class="text-info fw-normal" style="font-size: 0.72rem;">(Dibayar di awal Rp {{ number_format($t->original_jumlah, 0, ',', '.') }} pada {{ $t->paid_at->format('M Y') }})</small>
+                        @endif
+                    </td>
                     <td>
                         @if($t->metode_pembayaran)
                             <span class="badge bg-label-secondary"><i class="bx bx-credit-card-front me-1"></i> {{ $t->metode_pembayaran }}</span>
