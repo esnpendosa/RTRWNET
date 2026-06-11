@@ -600,9 +600,11 @@ class WhatsappController extends Controller
         }
 
         $hasBankName = false;
+        $detectedBank = null;
         foreach ($bankNames as $bank) {
             if (str_contains($ocrText, $bank)) {
                 $hasBankName = true;
+                $detectedBank = strtoupper($bank);
                 break;
             }
         }
@@ -643,7 +645,8 @@ class WhatsappController extends Controller
                    ", ocrLength=" . strlen($ocrText));
 
         if ($isValidReceipt) {
-            $tagihan->update(['status' => 'paid', 'paid_at' => now(), 'metode_pembayaran' => 'otomatis']);
+            $paymentMethod = 'Transfer ' . ($detectedBank ?: 'Bank');
+            $tagihan->update(['status' => 'paid', 'paid_at' => now(), 'metode_pembayaran' => $paymentMethod]);
             
             // Log the activity
             try {

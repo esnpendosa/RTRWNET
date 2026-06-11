@@ -11,6 +11,7 @@ class EnablePaidServices extends Command
 
     public function handle(\App\Services\MikrotikService $mikrotikService)
     {
+        set_time_limit(0);
         $isForce = $this->option('force');
 
         if (!$isForce) {
@@ -72,6 +73,9 @@ class EnablePaidServices extends Command
                             $message .= "Internet Anda sekarang sudah *aktif kembali*. 🎉\n\n";
                             $message .= "Terima kasih telah berlangganan layanan kami!";
                             $waClient->sendMessage($p->no_wa, ['text' => $message]);
+                            
+                            // Jeda 3-5 detik
+                            sleep(rand(3, 5));
                         } catch (\Exception $e) {
                             \Illuminate\Support\Facades\Log::error('Gagal kirim notif aktivasi: ' . $e->getMessage());
                         }

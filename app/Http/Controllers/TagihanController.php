@@ -200,6 +200,7 @@ class TagihanController extends Controller
             'jumlah' => 'required|numeric|min:0',
             'status' => 'required|in:unpaid,paid,pending,cancelled',
             'created_at' => 'nullable|date',
+            'metode_pembayaran' => 'nullable|string',
         ]);
 
         $oldStatus = $tagihan->status;
@@ -208,6 +209,8 @@ class TagihanController extends Controller
         
         if ($data['status'] !== 'paid') {
             $data['bayar_di_awal'] = false;
+            $data['paid_at'] = null;
+            $data['metode_pembayaran'] = null;
         }
 
         $tagihan->update($data);
@@ -489,6 +492,7 @@ class TagihanController extends Controller
         $tagihan->update([
             'status' => 'paid',
             'paid_at' => $request->paid_at ?? now(),
+            'metode_pembayaran' => $request->metode_pembayaran ?? $tagihan->metode_pembayaran,
             'catatan_admin' => $request->catatan_admin
         ]);
 

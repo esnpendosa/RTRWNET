@@ -57,7 +57,7 @@
 
                         <div class="mb-3">
                             <label class="form-label">Metode Pembayaran Manual (Pisahkan dengan Koma)</label>
-                            <input type="text" name="manual_methods" class="form-control" value="{{ \App\Models\Setting::get('manual_payment_methods', 'Transfer Bank,Cash') }}">
+                            <input type="text" name="manual_methods" class="form-control" value="{{ \App\Models\Setting::get('manual_payment_methods', 'Cash, Transfer BRI, Transfer BCA, Transfer BNI, Transfer Mandiri, Transfer DANA, Transfer OVO, Transfer ShopeePay, Transfer Gopay') }}">
                             <small class="text-muted">Contoh: Transfer Bank, Bayar Tunai, Titip Teknisi</small>
                         </div>
 

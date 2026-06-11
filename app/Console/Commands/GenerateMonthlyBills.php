@@ -25,6 +25,7 @@ class GenerateMonthlyBills extends Command
      */
     public function handle()
     {
+        set_time_limit(0);
         $enabled = \App\Models\Setting::get('billing_auto_generate_enabled', '1');
         if ($enabled != '1') {
             $this->info('Auto bill generation is disabled in settings.');
@@ -76,6 +77,9 @@ class GenerateMonthlyBills extends Command
                         $message .= "Jumlah Tagihan: *Rp 0*\n\n";
                         $message .= "Terima kasih telah memilih layanan internet kami! Nikmati koneksi Anda nggih.";
                         $waClient->sendMessage($p->no_wa, ['text' => $message]);
+                        
+                        // Jeda 3-5 detik
+                        sleep(rand(3, 5));
                     }
                 } else {
                     $tagihan = \App\Models\Tagihan::create([
@@ -99,6 +103,9 @@ class GenerateMonthlyBills extends Command
                         $message .= "Anda dapat mengecek detail tagihan dengan membalas pesan ini ketik: *Cek Tagihan*";
 
                         $waClient->sendMessage($p->no_wa, ['text' => $message]);
+                        
+                        // Jeda 3-5 detik
+                        sleep(rand(3, 5));
                     }
                 }
             }

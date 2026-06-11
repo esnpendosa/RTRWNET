@@ -381,8 +381,9 @@
                             <div class="mb-3">
                                 <label class="form-label">Metode Pembayaran</label>
                                 <select name="metode_pembayaran" class="form-select">
-                                    <option value="Cash">Cash</option>
-                                    <option value="Transfer Bank">Transfer Bank</option>
+                                    @foreach(explode(',', \App\Models\Setting::get('manual_payment_methods', 'Cash, Transfer BRI, Transfer BCA, Transfer BNI, Transfer Mandiri, Transfer DANA, Transfer OVO, Transfer ShopeePay, Transfer Gopay')) as $method)
+                                        <option value="{{ trim($method) }}">{{ trim($method) }}</option>
+                                    @endforeach
                                     <option value="Midtrans">Midtrans (Otomatis)</option>
                                 </select>
                             </div>
@@ -564,7 +565,7 @@
                         <div class="mb-3">
                             <label class="form-label">Metode</label>
                             @php
-                                $methods = explode(',', \App\Models\Setting::get('manual_payment_methods', 'Transfer Bank,Cash'));
+                                $methods = explode(',', \App\Models\Setting::get('manual_payment_methods', 'Cash, Transfer BRI, Transfer BCA, Transfer BNI, Transfer Mandiri, Transfer DANA, Transfer OVO, Transfer ShopeePay, Transfer Gopay'));
                             @endphp
                             <select name="metode_pembayaran" class="form-select" required>
                                 @foreach($methods as $method)
@@ -608,6 +609,18 @@
                             <div class="small mt-1">Bukti Transfer Fisik Tidak Tersedia (Hanya Catatan Sistem)</div>
                         </div>
                         @endif
+                        <div class="mb-3">
+                            <label class="form-label">Metode Pembayaran</label>
+                            <select name="metode_pembayaran" class="form-select" required>
+                                @foreach(explode(',', \App\Models\Setting::get('manual_payment_methods', 'Cash, Transfer BRI, Transfer BCA, Transfer BNI, Transfer Mandiri, Transfer DANA, Transfer OVO, Transfer ShopeePay, Transfer Gopay')) as $method)
+                                    <option value="{{ trim($method) }}" {{ $t->metode_pembayaran == trim($method) ? 'selected' : '' }}>{{ trim($method) }}</option>
+                                @endforeach
+                                <option value="Midtrans" {{ $t->metode_pembayaran == 'Midtrans' ? 'selected' : '' }}>Midtrans (Otomatis)</option>
+                                @if($t->metode_pembayaran && !in_array(trim($t->metode_pembayaran), array_map('trim', explode(',', \App\Models\Setting::get('manual_payment_methods', 'Cash, Transfer BRI, Transfer BCA, Transfer BNI, Transfer Mandiri, Transfer DANA, Transfer OVO, Transfer ShopeePay, Transfer Gopay')))) && $t->metode_pembayaran != 'Midtrans')
+                                    <option value="{{ $t->metode_pembayaran }}" selected>{{ $t->metode_pembayaran }}</option>
+                                @endif
+                            </select>
+                        </div>
                         <div class="mb-3">
                             <label class="form-label">Waktu Pembayaran (Sesuai Struk)</label>
                             <input type="datetime-local" name="paid_at" class="form-control" value="{{ $t->updated_at->format('Y-m-d\TH:i') }}" required>
@@ -715,6 +728,19 @@
                             <div class="col-12" id="paidAtSection{{ $t->id_tagihan }}" style="{{ $t->status == 'paid' ? '' : 'display:none' }}">
                                 <label class="form-label">Waktu Pembayaran (Paid At)</label>
                                 <input type="datetime-local" name="paid_at" class="form-control" value="{{ $t->paid_at ? date('Y-m-d\TH:i', strtotime($t->paid_at)) : '' }}">
+                            </div>
+                            <div class="col-12" id="metodePembayaranSection{{ $t->id_tagihan }}" style="{{ $t->status == 'paid' ? '' : 'display:none' }}">
+                                <label class="form-label">Metode Pembayaran</label>
+                                <select name="metode_pembayaran" class="form-select">
+                                    <option value="">-- Pilih Metode --</option>
+                                    @foreach(explode(',', \App\Models\Setting::get('manual_payment_methods', 'Cash, Transfer BRI, Transfer BCA, Transfer BNI, Transfer Mandiri, Transfer DANA, Transfer OVO, Transfer ShopeePay, Transfer Gopay')) as $method)
+                                        <option value="{{ trim($method) }}" {{ $t->metode_pembayaran == trim($method) ? 'selected' : '' }}>{{ trim($method) }}</option>
+                                    @endforeach
+                                    <option value="Midtrans" {{ $t->metode_pembayaran == 'Midtrans' ? 'selected' : '' }}>Midtrans (Otomatis)</option>
+                                    @if($t->metode_pembayaran && !in_array(trim($t->metode_pembayaran), array_map('trim', explode(',', \App\Models\Setting::get('manual_payment_methods', 'Cash, Transfer BRI, Transfer BCA, Transfer BNI, Transfer Mandiri, Transfer DANA, Transfer OVO, Transfer ShopeePay, Transfer Gopay')))) && $t->metode_pembayaran != 'Midtrans')
+                                        <option value="{{ $t->metode_pembayaran }}" selected>{{ $t->metode_pembayaran }}</option>
+                                    @endif
+                                </select>
                             </div>
                         </div>
                     </div>
@@ -837,10 +863,13 @@
     function togglePaidAt(id) {
         const status = document.getElementById('status' + id).value;
         const section = document.getElementById('paidAtSection' + id);
+        const methodSection = document.getElementById('metodePembayaranSection' + id);
         if(status === 'paid') {
-            section.style.display = 'block';
+            if(section) section.style.display = 'block';
+            if(methodSection) methodSection.style.display = 'block';
         } else {
-            section.style.display = 'none';
+            if(section) section.style.display = 'none';
+            if(methodSection) methodSection.style.display = 'none';
         }
     }
 

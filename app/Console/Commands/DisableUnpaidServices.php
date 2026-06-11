@@ -11,6 +11,7 @@ class DisableUnpaidServices extends Command
 
     public function handle(\App\Services\MikrotikService $mikrotikService)
     {
+        set_time_limit(0);
         $isForce = $this->option('force');
 
         if (!$isForce) {
@@ -83,6 +84,9 @@ class DisableUnpaidServices extends Command
                             $message .= "Silakan lakukan pembayaran dan internet Anda akan *otomatis aktif kembali* setelah konfirmasi.\n\n";
                             $message .= "Ketik *Cek Tagihan* untuk melihat detail tagihan Anda.";
                             $waClient->sendMessage($p->no_wa, ['text' => $message]);
+                            
+                            // Jeda 3-5 detik
+                            sleep(rand(3, 5));
                         } catch (\Exception $e) {
                             \Illuminate\Support\Facades\Log::error('Gagal kirim notif isolir: ' . $e->getMessage());
                         }

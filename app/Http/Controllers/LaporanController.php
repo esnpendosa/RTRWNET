@@ -23,12 +23,14 @@ class LaporanController extends Controller
     {
         $query = Tagihan::with('pelanggan');
 
-        // Search by Pelanggan Name or Code
+        // Search by Pelanggan Name, Code, or Payment Method
         if ($request->search) {
             $search = $request->search;
-            $query->whereHas('pelanggan', function ($q) use ($search) {
-                $q->where('nama_pelanggan', 'like', "%{$search}%")
-                  ->orWhere('kode_pelanggan', 'like', "%{$search}%");
+            $query->where(function ($q) use ($search) {
+                $q->whereHas('pelanggan', function ($sub) use ($search) {
+                    $sub->where('nama_pelanggan', 'like', "%{$search}%")
+                        ->orWhere('kode_pelanggan', 'like', "%{$search}%");
+                })->orWhere('metode_pembayaran', 'like', "%{$search}%");
             });
         }
 
@@ -124,9 +126,11 @@ class LaporanController extends Controller
 
         if ($request->search) {
             $search = $request->search;
-            $query->whereHas('pelanggan', function ($q) use ($search) {
-                $q->where('nama_pelanggan', 'like', "%{$search}%")
-                  ->orWhere('kode_pelanggan', 'like', "%{$search}%");
+            $query->where(function ($q) use ($search) {
+                $q->whereHas('pelanggan', function ($sub) use ($search) {
+                    $sub->where('nama_pelanggan', 'like', "%{$search}%")
+                        ->orWhere('kode_pelanggan', 'like', "%{$search}%");
+                })->orWhere('metode_pembayaran', 'like', "%{$search}%");
             });
         }
         if ($request->month && $request->year) {

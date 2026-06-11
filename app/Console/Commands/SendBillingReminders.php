@@ -28,6 +28,7 @@ class SendBillingReminders extends Command
      */
     public function handle()
     {
+        set_time_limit(0);
         $globalEnabled = Setting::get('wa_billing_notification_enabled', '1');
         if ($globalEnabled != '1') {
             $this->info('WhatsApp billing notifications are globally disabled. Skipping reminders.');
@@ -81,6 +82,9 @@ class SendBillingReminders extends Command
                 try {
                     $waClient->sendMessage($p->no_wa, ['text' => $message]);
                     $sentCount++;
+                    
+                    // Jeda 3-5 detik untuk mencegah spam & connection drops
+                    sleep(rand(3, 5));
                 } catch (\Exception $e) {
                     \Illuminate\Support\Facades\Log::error('Gagal kirim reminder tagihan: ' . $e->getMessage());
                 }

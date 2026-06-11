@@ -28,5 +28,21 @@ class AppServiceProvider extends ServiceProvider
         \Illuminate\Support\Facades\View::composer('*', function ($view) {
             $view->with('global_units', collect([]));
         });
+
+        // Seed/Upgrade manual payment methods with granular bank/e-wallet options
+        try {
+            if (\Schema::hasTable('settings')) {
+                $manualMethods = \App\Models\Setting::get('manual_payment_methods');
+                if (!$manualMethods || $manualMethods === 'Transfer Bank,Cash') {
+                    \App\Models\Setting::set(
+                        'manual_payment_methods',
+                        'Cash, Transfer BRI, Transfer BCA, Transfer BNI, Transfer Mandiri, Transfer DANA, Transfer OVO, Transfer ShopeePay, Transfer Gopay',
+                        'payment'
+                    );
+                }
+            }
+        } catch (\Exception $e) {
+            // Silent fallback during migration/seeding
+        }
     }
 }
