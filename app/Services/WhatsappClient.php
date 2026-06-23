@@ -17,12 +17,12 @@ class WhatsappClient
 
     protected function secret()
     {
-        return env('BOT_SECRET', 'rozitech-bot-secret-2024');
+        return env('BOT_SECRET'); // Wajib di-set di .env — tidak ada fallback default
     }
 
-    public function sendMessage($phone, $data)
+    public function sendMessage($phone, $data, $async = false)
     {
-        Log::info("WhatsappClient: Attempting to send message to $phone via " . $this->baseUrl);
+        Log::info("WhatsappClient: Attempting to send message to $phone via " . $this->baseUrl . ($async ? " (async)" : ""));
         try {
             $message = is_array($data) ? ($data['text'] ?? '') : $data;
             
@@ -30,7 +30,8 @@ class WhatsappClient
                 ->withHeaders(['X-Bot-Secret' => $this->secret()])
                 ->post($this->baseUrl . '/send-message', [
                     'phone'   => $phone,
-                    'message' => $message
+                    'message' => $message,
+                    'async'   => $async
                 ]);
 
             if (!$response->successful()) {
@@ -46,9 +47,9 @@ class WhatsappClient
         }
     }
 
-    public function sendFile($phone, $fileContent, $filename, $mimetype = 'application/pdf', $caption = '')
+    public function sendFile($phone, $fileContent, $filename, $mimetype = 'application/pdf', $caption = '', $async = false)
     {
-        Log::info("WhatsappClient: Attempting to send file $filename to $phone");
+        Log::info("WhatsappClient: Attempting to send file $filename to $phone" . ($async ? " (async)" : ""));
         try {
             $response = Http::timeout(30)
                 ->withHeaders(['X-Bot-Secret' => $this->secret()])
@@ -57,7 +58,8 @@ class WhatsappClient
                     'media'    => base64_encode($fileContent),
                     'filename' => $filename,
                     'mimetype' => $mimetype,
-                    'caption'  => $caption
+                    'caption'  => $caption,
+                    'async'    => $async
                 ]);
 
             return $response->successful();
@@ -67,9 +69,9 @@ class WhatsappClient
         }
     }
 
-    public function sendFileUrl($phone, $url, $filename, $mimetype = 'application/pdf', $caption = '')
+    public function sendFileUrl($phone, $url, $filename, $mimetype = 'application/pdf', $caption = '', $async = false)
     {
-        Log::info("WhatsappClient: Attempting to send file via URL $url to $phone");
+        Log::info("WhatsappClient: Attempting to send file via URL $url to $phone" . ($async ? " (async)" : ""));
         try {
             $response = Http::timeout(30)
                 ->withHeaders(['X-Bot-Secret' => $this->secret()])
@@ -78,7 +80,8 @@ class WhatsappClient
                     'url'      => $url,
                     'filename' => $filename,
                     'mimetype' => $mimetype,
-                    'caption'  => $caption
+                    'caption'  => $caption,
+                    'async'    => $async
                 ]);
 
             return $response->successful();
@@ -144,7 +147,7 @@ class WhatsappClient
     {
         try {
             $response = Http::timeout(10)
-                ->withHeaders(['X-Bot-Secret' => env('BOT_SECRET', 'rozitech-bot-secret-2024')])
+                ->withHeaders(['X-Bot-Secret' => $this->secret()])
                 ->post($this->baseUrl . '/session/start', ['id' => $id]);
             return $response->json();
         } catch (\Exception $e) {

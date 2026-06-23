@@ -76,10 +76,7 @@ class GenerateMonthlyBills extends Command
                         $message .= "Status: *LUNAS (PROMO GRATIS)*\n";
                         $message .= "Jumlah Tagihan: *Rp 0*\n\n";
                         $message .= "Terima kasih telah memilih layanan internet kami! Nikmati koneksi Anda nggih.";
-                        $waClient->sendMessage($p->no_wa, ['text' => $message]);
-                        
-                        // Jeda 3-5 detik
-                        sleep(rand(3, 5));
+                        $waClient->sendMessage($p->no_wa, ['text' => $message], true);
                     }
                 } else {
                     $tagihan = \App\Models\Tagihan::create([
@@ -102,10 +99,7 @@ class GenerateMonthlyBills extends Command
                         $message .= "Silakan lakukan pembayaran sebelum tanggal " . \App\Models\Setting::get('billing_isolir_date', '10') . " agar layanan tidak terisolir otomatis.\n";
                         $message .= "Anda dapat mengecek detail tagihan dengan membalas pesan ini ketik: *Cek Tagihan*";
 
-                        $waClient->sendMessage($p->no_wa, ['text' => $message]);
-                        
-                        // Jeda 3-5 detik
-                        sleep(rand(3, 5));
+                        $waClient->sendMessage($p->no_wa, ['text' => $message], true);
                     }
                 }
             }

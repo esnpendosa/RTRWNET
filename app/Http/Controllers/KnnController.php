@@ -42,10 +42,27 @@ class KnnController extends Controller
      *
      * Route: GET /knn
      */
+    /**
+     * ─────────────────────────────────────────────────────────────────────────
+     * METHOD: index() — Halaman Utama KNN
+     * ─────────────────────────────────────────────────────────────────────────
+     * Menampilkan:
+     *   - Daftar semua pelanggan (untuk pilih data uji)
+     *   - Riwayat hasil klasifikasi KNN (Tabel 4.5, 4.6, 4.7 di skripsi)
+     *   - Tabel akurasi, confusion matrix, F1-Score
+     *
+     * Route: GET /knn
+     */
     public function index()
     {
         // Ambil semua pelanggan sebagai kandidat data uji
         $pelanggan = Pelanggan::all();
+
+        // Cari K terbaik secara otomatis untuk K=1 sampai 9
+        $bestKData = $this->knnService->findBestK();
+        $bestK = $bestKData['best_k'];
+        $bestAcc = $bestKData['best_acc'];
+        $evaluasi = $bestKData['all'];
 
         // Ambil riwayat hasil KNN dengan relasi lengkap:
         // - pelanggan: nama pelanggan yang diklasifikasi
@@ -55,7 +72,7 @@ class KnnController extends Controller
             ->latest()  // urutkan dari yang terbaru
             ->get();
 
-        return view('content.knn.index', compact('pelanggan', 'hasil'));
+        return view('content.knn.index', compact('pelanggan', 'hasil', 'bestK', 'bestAcc', 'evaluasi'));
     }
 
     /**
@@ -63,69 +80,55 @@ class KnnController extends Controller
      * METHOD: process() — Klasifikasi Satu Pelanggan
      * ─────────────────────────────────────────────────────────────────────────
      * Melakukan klasifikasi KNN untuk SATU pelanggan yang dipilih dari form.
-     * Ini setara dengan menghitung satu baris DATA UJI baru di Excel.
-     *
-     * Alur:
-     *   1. Validasi input (id_pelanggan dan nilai_k wajib diisi)
-     *   2. Panggil KnnService::classify() untuk kalkulasi Euclidean + Voting
-     *   3. Redirect balik dengan pesan hasil prediksi label (HIGH/MEDIUM/LOW)
+     * Ini otomatis mencari K terbaik dari K=1..9 dengan akurasi tertinggi.
      *
      * Route: POST /knn/process
      */
     public function process(Request $request)
     {
-        // Validasi input form — pastikan data pelanggan ada di DB dan K adalah integer positif
+        // Validasi input form — pastikan data pelanggan ada di DB
         $request->validate([
             'id_pelanggan' => 'required|exists:pelanggan,id_pelanggan', // data uji harus ada di DB
-            'nilai_k'      => 'required|integer|min:1'                  // K minimal 1
         ]);
 
-        // Jalankan klasifikasi KNN:
-        // - Menghitung jarak Euclidean 4D ke semua data latih
-        // - Mengambil K tetangga terdekat (RANK ≤ K)
-        // - Melakukan voting label mayoritas
-        // - Menyimpan hasil + detail tetangga ke DB
-        $hasil = $this->knnService->classify($request->id_pelanggan, $request->nilai_k);
+        // Cari K terbaik secara otomatis untuk K=1 sampai 9
+        $bestKData = $this->knnService->findBestK();
+        $bestK = $bestKData['best_k'];
+        $bestAcc = $bestKData['best_acc'];
+
+        // Jalankan klasifikasi KNN menggunakan K optimal:
+        $hasil = $this->knnService->classify($request->id_pelanggan, $bestK);
 
         // Jika gagal (data latih tidak cukup), kembalikan pesan error
         if (!$hasil) {
             return back()->with('error', 'Gagal memproses KNN. Pastikan data training mencukupi.');
         }
 
-        // Berhasil — tampilkan label hasil prediksi (HIGH/MEDIUM/LOW)
-        return back()->with('success', "Pelanggan berhasil diklasifikasikan sebagai: {$hasil->label_hasil}");
+        // Berhasil — tampilkan label hasil prediksi (HIGH/MEDIUM/LOW) dan informasi K yang terpilih
+        return back()->with('success', "Pelanggan berhasil diklasifikasikan sebagai: {$hasil->label_hasil} menggunakan K terbaik = {$bestK} (Akurasi: {$bestAcc}%)");
     }
 
     /**
      * ─────────────────────────────────────────────────────────────────────────
      * METHOD: batchProcess() — Klasifikasi Semua Pelanggan Sekaligus
      * ─────────────────────────────────────────────────────────────────────────
-     * Melakukan klasifikasi KNN untuk SEMUA pelanggan secara batch.
-     * Ini digunakan untuk:
-     *   - Demo sidang (menampilkan akurasi 100% di Tabel 4.6)
-     *   - Update label prioritas seluruh pelanggan setelah ada data baru
-     *   - Validasi konsistensi sistem KNN
-     *
-     * Alur:
-     *   1. Validasi bahwa data latih cukup (minimal K pelanggan sudah berlabel)
-     *   2. Loop semua pelanggan, jalankan classify() satu per satu
-     *   3. Redirect ke halaman KNN dengan total pelanggan yang berhasil diklasifikasi
+     * Melakukan klasifikasi KNN untuk SEMUA pelanggan secara batch menggunakan K terbaik.
      *
      * Route: POST /knn/batch
      */
     public function batchProcess(Request $request)
     {
-        // Ambil nilai K dari request, default K=3 sesuai skripsi
-        $k = $request->nilai_k ?? 3;
+        // Cari K terbaik secara otomatis untuk K=1 sampai 9
+        $bestKData = $this->knnService->findBestK();
+        $bestK = $bestKData['best_k'];
+        $bestAcc = $bestKData['best_acc'];
 
         // ── Validasi: cek apakah data latih mencukupi ─────────────────────────
-        // Data latih = pelanggan yang sudah memiliki label (prioritas_label NOT NULL)
-        // Minimal harus ada K data latih agar bisa mencari K tetangga terdekat
         $trainingCount = Pelanggan::whereNotNull('prioritas_label')->count();
-        if ($trainingCount < $k) {
+        if ($trainingCount < $bestK) {
             return back()->with('error',
-                "Data training tidak cukup. Dibutuhkan minimal $k pelanggan " .
-                "yang sudah memiliki label (High/Medium/Low)."
+                "Data training tidak cukup. Dibutuhkan minimal $bestK pelanggan " .
+                "yang sudah memiliki label (High/Medium/Low) untuk menggunakan K={$bestK}."
             );
         }
 
@@ -134,14 +137,12 @@ class KnnController extends Controller
 
         $count = 0; // counter pelanggan yang berhasil diklasifikasi
         foreach ($pelanggan as $p) {
-            // Setiap pelanggan diklasifikasikan menggunakan K tetangga terdekat
-            // Pelanggan yang sudah berlabel juga diklasifikasikan ulang untuk validasi akurasi
-            $hasil = $this->knnService->classify($p->id_pelanggan, $k);
+            $hasil = $this->knnService->classify($p->id_pelanggan, $bestK);
             if ($hasil) $count++; // hitung yang berhasil
         }
 
         // Redirect ke halaman KNN dengan pesan sukses
         return redirect()->route('knn.index')
-            ->with('success', "Seluruh pelanggan ($count data) telah berhasil diklasifikasikan ulang.");
+            ->with('success', "Seluruh pelanggan ($count data) telah berhasil diklasifikasikan ulang menggunakan K terbaik = {$bestK} (Akurasi: {$bestAcc}%).");
     }
 }

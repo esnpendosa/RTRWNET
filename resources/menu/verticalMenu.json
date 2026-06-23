@@ -25,6 +25,13 @@
       "permission": "pelanggan_manage"
     },
     {
+      "url": "/pelanggan/monitoring",
+      "name": "Monitoring WiFi",
+      "icon": "menu-icon icon-base bx bx-wifi",
+      "slug": "pelanggan.monitoring",
+      "permission": "pelanggan_manage"
+    },
+    {
       "url": "/registrasi",
       "name": "Registrasi Baru",
       "icon": "menu-icon icon-base bx bx-user-plus",
@@ -54,6 +61,13 @@
       "name": "Klasifikasi Prioritas",
       "icon": "menu-icon icon-base bx bx-brain",
       "slug": "knn",
+      "permission": "knn_process"
+    },
+    {
+      "url": "/knn/report",
+      "name": "Laporan KNN",
+      "icon": "menu-icon icon-base bx bx-file",
+      "slug": "knn.report",
       "permission": "knn_process"
     },
     {

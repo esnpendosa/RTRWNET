@@ -239,4 +239,127 @@ class KnnService
 
         return $hasil; // Kembalikan object hasil untuk ditampilkan di UI
     }
+
+    /**
+     * ─────────────────────────────────────────────────────────────────────────
+     * FUNGSI 3: Evaluasi Akurasi untuk Nilai K Tertentu (TANPA menyimpan ke DB)
+     * ─────────────────────────────────────────────────────────────────────────
+     *
+     * Menggunakan strategi Leave-One-Out (LOO): setiap data berlabel diprediksi
+     * menggunakan data berlabel lainnya sebagai training set, lalu dibandingkan
+     * dengan label aktualnya untuk menghitung akurasi.
+     *
+     * @param int $k Nilai K yang akan dievaluasi
+     * @return array ['k' => int, 'benar' => int, 'total' => int, 'akurasi' => float]
+     */
+    public function evaluateAccuracy(int $k): array
+    {
+        // Ambil semua data yang sudah memiliki label aktual (data berlabel)
+        $labeledData = Pelanggan::whereNotNull('prioritas_label')->get();
+        $total  = $labeledData->count();
+        $benar  = 0;
+
+        if ($total < $k + 1) {
+            // Tidak cukup data untuk dievaluasi dengan K ini
+            return ['k' => $k, 'benar' => 0, 'total' => $total, 'akurasi' => 0.0];
+        }
+
+        foreach ($labeledData as $testItem) {
+            // Training set = semua data berlabel KECUALI data uji saat ini (Leave-One-Out)
+            $trainingSet = $labeledData->filter(fn($p) => $p->id_pelanggan !== $testItem->id_pelanggan);
+
+            if ($trainingSet->count() < $k) {
+                continue; // skip jika tidak cukup tetangga
+            }
+
+            // ── Hitung jarak ke semua data latih ─────────────────────────────
+            $distances = [];
+            foreach ($trainingSet as $train) {
+                $dist = $this->euclideanDistance4D(
+                    $testItem->latitude, $testItem->longitude, $testItem->usage_gb, $testItem->jumlah_device,
+                    $train->latitude,    $train->longitude,    $train->usage_gb,    $train->jumlah_device
+                );
+                $distances[] = [
+                    'distance' => $dist,
+                    'label'    => $train->prioritas_label,
+                ];
+            }
+
+            // ── Urutkan ascending, ambil K terdekat ──────────────────────────
+            usort($distances, fn($a, $b) => $a['distance'] <=> $b['distance']);
+            $neighbors = array_slice($distances, 0, $k);
+
+            // ── Voting mayoritas ──────────────────────────────────────────────
+            $votes = [];
+            foreach ($neighbors as $n) {
+                $label = strtoupper($n['label']);
+                if ($label === 'SANGAT PRIORITAS' || $label === 'HIGH')   { $label = 'HIGH'; }
+                elseif ($label === 'PRIORITAS' || $label === 'MEDIUM')    { $label = 'MEDIUM'; }
+                else                                                       { $label = 'LOW'; }
+                $votes[$label] = ($votes[$label] ?? 0) + 1;
+            }
+            arsort($votes);
+            $predicted = key($votes);
+
+            // ── Bandingkan dengan label aktual ────────────────────────────────
+            $actual = strtoupper($testItem->prioritas_label);
+            if ($actual === 'SANGAT PRIORITAS' || $actual === 'HIGH')  { $actual = 'HIGH'; }
+            elseif ($actual === 'PRIORITAS' || $actual === 'MEDIUM')   { $actual = 'MEDIUM'; }
+            else                                                        { $actual = 'LOW'; }
+
+            if ($predicted === $actual) {
+                $benar++;
+            }
+        }
+
+        $akurasi = $total > 0 ? round(($benar / $total) * 100, 2) : 0.0;
+
+        return [
+            'k'       => $k,
+            'benar'   => $benar,
+            'salah'   => $total - $benar,
+            'total'   => $total,
+            'akurasi' => $akurasi,
+        ];
+    }
+
+    /**
+     * ─────────────────────────────────────────────────────────────────────────
+     * FUNGSI 4: Temukan K Terbaik (Loop K = 1 sampai 9)
+     * ─────────────────────────────────────────────────────────────────────────
+     *
+     * Menjalankan evaluasi akurasi untuk setiap K dari 1 hingga 9,
+     * lalu mengembalikan K dengan akurasi tertinggi beserta ringkasan semua K.
+     *
+     * Jika ada beberapa K dengan akurasi sama, dipilih K terkecil (lebih sederhana).
+     *
+     * @return array [
+     *   'best_k'    => int,           // K optimal yang dipilih
+     *   'best_acc'  => float,         // Akurasi K optimal (%)
+     *   'all'       => array,         // Hasil evaluasi semua K (array of array)
+     * ]
+     */
+    public function findBestK(): array
+    {
+        $results = [];
+        $bestK   = 1;
+        $bestAcc = -1;
+
+        for ($k = 1; $k <= 9; $k++) {
+            $eval = $this->evaluateAccuracy($k);
+            $results[] = $eval;
+
+            // Pilih K terkecil jika akurasi sama (prinsip Occam's Razor)
+            if ($eval['akurasi'] > $bestAcc) {
+                $bestAcc = $eval['akurasi'];
+                $bestK   = $k;
+            }
+        }
+
+        return [
+            'best_k'   => $bestK,
+            'best_acc' => $bestAcc,
+            'all'      => $results,
+        ];
+    }
 }

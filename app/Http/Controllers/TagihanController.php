@@ -396,7 +396,7 @@ class TagihanController extends Controller
                             $message .= "Status: *LUNAS (PROMO GRATIS)*\n";
                             $message .= "Jumlah Tagihan: *Rp 0*\n\n";
                             $message .= "Terima kasih telah memilih layanan internet kami! Nikmati koneksi Anda nggih.";
-                            $waClient->sendMessage($p->no_wa, ['text' => $message]);
+                            $waClient->sendMessage($p->no_wa, ['text' => $message], true);
                         } catch (\Exception $e) {
                             \Illuminate\Support\Facades\Log::error('Gagal kirim notifikasi tagihan gratis: ' . $e->getMessage());
                         }
@@ -430,7 +430,7 @@ class TagihanController extends Controller
                             $message .= "Semua AN/ FACHRUR ROZI\n\n";
                             $message .= "Setelah Melakukan Pembayaran Silahkan Screenshoot / Konfirmasi Pembayaran Melalui Whatsapp wa.me/+6285604118932";
 
-                            $waClient->sendMessage($p->no_wa, ['text' => $message]);
+                            $waClient->sendMessage($p->no_wa, ['text' => $message], true);
                         } catch (\Exception $e) {
                             \Illuminate\Support\Facades\Log::error('Gagal kirim notifikasi tagihan baru: ' . $e->getMessage());
                         }
@@ -507,12 +507,33 @@ class TagihanController extends Controller
         }
 
         $pelanggan = $tagihan->pelanggan;
+        $mikrotikWarning = null;
+
         if ($pelanggan && $pelanggan->id_router) {
-            $mikrotikService = app(\App\Services\MikrotikService::class);
-            $success = $mikrotikService->setSecretStatus($pelanggan->router, $pelanggan->mikrotik_username ?: $pelanggan->kode_pelanggan, $pelanggan->mikrotik_type, false, $pelanggan->ip_address);
-            if ($success) {
-                $pelanggan->update(['is_active' => true]);
+            // Tandai aktif di DB terlebih dahulu (pembayaran sudah diverifikasi admin)
+            $pelanggan->update(['is_active' => true]);
+
+            // Sinkronisasi ke MikroTik (best-effort)
+            try {
+                $mikrotikService = app(\App\Services\MikrotikService::class);
+                $success = $mikrotikService->setSecretStatus(
+                    $pelanggan->router,
+                    $pelanggan->mikrotik_username ?: $pelanggan->kode_pelanggan,
+                    $pelanggan->mikrotik_type,
+                    false,
+                    $pelanggan->ip_address
+                );
+                if (!$success) {
+                    $mikrotikWarning = '⚠️ Catatan: Tagihan terverifikasi, namun sinkronisasi otomatis ke MikroTik gagal. Router mungkin offline. Coba jalankan "Aktifkan Pelanggan Lunas" dari menu Pengaturan.';
+                    \Illuminate\Support\Facades\Log::warning("Billing Verifikasi: MikroTik sync failed for {$pelanggan->kode_pelanggan}. Customer marked active in DB but router not updated.");
+                }
+            } catch (\Exception $e) {
+                $mikrotikWarning = '⚠️ Catatan: Tagihan terverifikasi, namun terjadi error saat sinkronisasi MikroTik: ' . $e->getMessage();
+                \Illuminate\Support\Facades\Log::error("Billing Verifikasi: MikroTik exception for {$pelanggan->kode_pelanggan}: " . $e->getMessage());
             }
+        } elseif ($pelanggan) {
+            // Tidak ada router terkonfigurasi, tetap tandai aktif
+            $pelanggan->update(['is_active' => true]);
         }
 
         // Kirim Notifikasi WA jika nomor WA ada dan aktif secara global serta aktif per pelanggan
@@ -525,7 +546,12 @@ class TagihanController extends Controller
             }
         }
 
-        return back()->with('success', 'Tagihan berhasil diverifikasi dan layanan diaktifkan.');
+        $successMsg = 'Tagihan berhasil diverifikasi dan layanan diaktifkan.';
+        if ($mikrotikWarning) {
+            return back()->with('success', $successMsg)->with('warning', $mikrotikWarning);
+        }
+
+        return back()->with('success', $successMsg);
     }
 
     public function settings()
@@ -614,12 +640,33 @@ class TagihanController extends Controller
         ]);
 
         $pelanggan = $tagihan->pelanggan;
+        $mikrotikWarning = null;
+
         if ($pelanggan && $pelanggan->id_router) {
-            $mikrotikService = app(\App\Services\MikrotikService::class);
-            $success = $mikrotikService->setSecretStatus($pelanggan->router, $pelanggan->mikrotik_username ?: $pelanggan->kode_pelanggan, $pelanggan->mikrotik_type, false, $pelanggan->ip_address);
-            if ($success) {
-                $pelanggan->update(['is_active' => true]);
+            // Tandai aktif di DB terlebih dahulu (pembayaran sudah dikonfirmasi admin)
+            $pelanggan->update(['is_active' => true]);
+
+            // Sinkronisasi ke MikroTik (best-effort)
+            try {
+                $mikrotikService = app(\App\Services\MikrotikService::class);
+                $success = $mikrotikService->setSecretStatus(
+                    $pelanggan->router,
+                    $pelanggan->mikrotik_username ?: $pelanggan->kode_pelanggan,
+                    $pelanggan->mikrotik_type,
+                    false,
+                    $pelanggan->ip_address
+                );
+                if (!$success) {
+                    $mikrotikWarning = '⚠️ Catatan: Pembayaran berhasil dicatat, namun sinkronisasi otomatis ke MikroTik gagal. Router mungkin offline. Coba jalankan "Aktifkan Pelanggan Lunas" dari menu Pengaturan.';
+                    \Illuminate\Support\Facades\Log::warning("Billing Cash: MikroTik sync failed for {$pelanggan->kode_pelanggan}. Customer marked active in DB but router not updated.");
+                }
+            } catch (\Exception $e) {
+                $mikrotikWarning = '⚠️ Catatan: Pembayaran berhasil dicatat, namun terjadi error saat sinkronisasi MikroTik: ' . $e->getMessage();
+                \Illuminate\Support\Facades\Log::error("Billing Cash: MikroTik exception for {$pelanggan->kode_pelanggan}: " . $e->getMessage());
             }
+        } elseif ($pelanggan) {
+            // Tidak ada router terkonfigurasi, tetap tandai aktif
+            $pelanggan->update(['is_active' => true]);
         }
 
         // Kirim Notifikasi WA Kwitansi Lunas jika aktif secara global serta aktif per pelanggan
@@ -634,7 +681,12 @@ class TagihanController extends Controller
 
         \App\Helpers\ActivityLogger::log('Mengonfirmasi pembayaran Cash untuk tagihan #' . $tagihan->id_tagihan . ' (' . ($tagihan->pelanggan ? $tagihan->pelanggan->nama_pelanggan : 'Umum') . ') sebesar Rp ' . number_format($tagihan->jumlah, 0, ',', '.'), 'tagihan');
 
-        return back()->with('success', 'Pembayaran Cash berhasil dikonfirmasi, WiFi diaktifkan, dan struk terkirim otomatis ke WhatsApp pelanggan!');
+        $successMsg = 'Pembayaran Cash berhasil dikonfirmasi, WiFi diaktifkan, dan struk terkirim otomatis ke WhatsApp pelanggan!';
+        if ($mikrotikWarning) {
+            return back()->with('success', $successMsg)->with('warning', $mikrotikWarning);
+        }
+
+        return back()->with('success', $successMsg);
     }
 
     public function sendReceiptWa(Tagihan $tagihan)
@@ -663,22 +715,44 @@ class TagihanController extends Controller
         
         try {
             if ($type == 'reminder') {
-                \Illuminate\Support\Facades\Artisan::call('billing:remind', ['--force' => true]);
-                $output = \Illuminate\Support\Facades\Artisan::output();
-                return back()->with('success', 'Pengiriman pengingat WhatsApp selesai dijalankan. Hasil: ' . nl2br($output));
+                if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+                    pclose(popen("cmd /c start /B php artisan billing:remind --force", "r"));
+                } else {
+                    exec("php artisan billing:remind --force > /dev/null 2>&1 &");
+                }
+                return back()->with('success', 'Pengiriman pengingat WhatsApp massal telah dijalankan di latar belakang (background). Proses ini akan berjalan otomatis. Silakan cek berkas log Laravel.');
             }
 
-            if ($type == 'disable' || $type == 'all') {
-                \Illuminate\Support\Facades\Artisan::call('billing:disable-unpaid', ['--force' => true]);
+            if ($type == 'disable') {
+                if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+                    pclose(popen("cmd /c start /B php artisan billing:disable-unpaid --force", "r"));
+                } else {
+                    exec("php artisan billing:disable-unpaid --force > /dev/null 2>&1 &");
+                }
+                return back()->with('success', 'Proses isolir otomatis pelanggan belum bayar sedang berjalan di latar belakang.');
             }
             
-            if ($type == 'enable' || $type == 'all') {
-                \Illuminate\Support\Facades\Artisan::call('billing:enable-paid', ['--force' => true]);
+            if ($type == 'enable') {
+                if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+                    pclose(popen("cmd /c start /B php artisan billing:enable-paid --force", "r"));
+                } else {
+                    exec("php artisan billing:enable-paid --force > /dev/null 2>&1 &");
+                }
+                return back()->with('success', 'Proses aktivasi otomatis pelanggan lunas sedang berjalan di latar belakang.');
+            }
+
+            if ($type == 'all') {
+                if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+                    pclose(popen("cmd /c start /B php artisan billing:disable-unpaid --force", "r"));
+                    pclose(popen("cmd /c start /B php artisan billing:enable-paid --force", "r"));
+                } else {
+                    exec("php artisan billing:disable-unpaid --force > /dev/null 2>&1 &");
+                    exec("php artisan billing:enable-paid --force > /dev/null 2>&1 &");
+                }
+                return back()->with('success', 'Semua proses sinkronisasi isolir dan aktivasi otomatis sedang berjalan di latar belakang.');
             }
             
-            $output = \Illuminate\Support\Facades\Artisan::output();
-            
-            return back()->with('success', 'Sinkronisasi On/Off otomatis selesai dijalankan. Hasil: ' . nl2br($output));
+            return back()->with('error', 'Parameter tipe sinkronisasi tidak valid.');
         } catch (\Exception $e) {
             return back()->with('error', 'Gagal menjalankan sinkronisasi: ' . $e->getMessage());
         }

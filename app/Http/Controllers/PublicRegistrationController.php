@@ -196,7 +196,7 @@ class PublicRegistrationController extends Controller
         $pelanggan = Pelanggan::where('kode_pelanggan', $code)->firstOrFail();
 
         // Get admin phone number (cleaned for direct WhatsApp chat API)
-        $adminNum = env('WHATSAPP_ADMIN_NUMBER', '6282187827382');
+        $adminNum = env('WHATSAPP_ADMIN_NUMBER');
         if (str_contains($adminNum, '@')) {
             $adminNum = explode('@', $adminNum)[0];
         }

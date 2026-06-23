@@ -98,6 +98,9 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/pelanggan/card-massal', [PelangganController::class, 'cardMassal'])->name('pelanggan.card-massal');
         Route::get('/pelanggan/export', [PelangganController::class, 'export'])->name('pelanggan.export');
         Route::get('/pelanggan/get-next-code', [PelangganController::class, 'getNextCode'])->name('pelanggan.next-code');
+        Route::get('/pelanggan/monitoring', [PelangganController::class, 'monitoring'])->name('pelanggan.monitoring');
+        Route::get('/pelanggan/monitoring-data', [PelangganController::class, 'monitoringData'])->name('pelanggan.monitoring.data');
+        Route::post('/pelanggan/{pelanggan}/ping', [PelangganController::class, 'pingPelanggan'])->name('pelanggan.ping');
         Route::get('/pelanggan/{pelanggan}/card', [PelangganController::class, 'card'])->name('pelanggan.card');
         Route::get('pelanggan/{pelanggan}/delete-direct', [PelangganController::class, 'destroyDirect'])->name('pelanggan.destroy-direct');
         Route::resource('pelanggan', PelangganController::class);
@@ -119,6 +122,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('knn', [KnnController::class, 'index'])->name('knn.index');
         Route::post('knn/process', [KnnController::class, 'process'])->name('knn.process');
         Route::post('knn/batch', [KnnController::class, 'batchProcess'])->name('knn.batch');
+        Route::get('knn/report', [\App\Http\Controllers\KnnReportController::class, 'index'])->name('knn.report');
     });
 
     // Rute
@@ -281,8 +285,12 @@ Route::get('pay/{kode_pelanggan}', [\App\Http\Controllers\PaymentController::cla
 
 // Temporary route to get WA Groups from local bot on aaPanel
 Route::get('get-wa-groups', function() {
-    $port = 3000;
-    $secret = 'rozitech-bot-secret-2024';
+    $port = env('BOT_PORT', 3000);
+    $secret = env('BOT_SECRET'); // Ambil dari .env
+
+    if (!$secret) {
+        return response()->json(['error' => 'Bot secret not configured'], 500);
+    }
     
     // Parse .env directly in case config is cached
     if (file_exists(base_path('.env'))) {

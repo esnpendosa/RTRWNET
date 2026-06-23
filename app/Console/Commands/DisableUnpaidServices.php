@@ -83,10 +83,7 @@ class DisableUnpaidServices extends Command
                             $message .= "Internet Anda telah *dinonaktifkan* karena tagihan bulan *{$monthName} {$currentYear}* sebesar *Rp " . number_format($p->harga_layanan) . "* belum dibayar.\n\n";
                             $message .= "Silakan lakukan pembayaran dan internet Anda akan *otomatis aktif kembali* setelah konfirmasi.\n\n";
                             $message .= "Ketik *Cek Tagihan* untuk melihat detail tagihan Anda.";
-                            $waClient->sendMessage($p->no_wa, ['text' => $message]);
-                            
-                            // Jeda 3-5 detik
-                            sleep(rand(3, 5));
+                            $waClient->sendMessage($p->no_wa, ['text' => $message], true);
                         } catch (\Exception $e) {
                             \Illuminate\Support\Facades\Log::error('Gagal kirim notif isolir: ' . $e->getMessage());
                         }

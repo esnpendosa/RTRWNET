@@ -831,7 +831,7 @@ class WhatsappController extends Controller
         $odpCount = OdcOdp::where('tipe', 'ODP')->count();
         $networkSummary = "DATA JARINGAN REALTIME:\n- Total Pelanggan: $pelangganCount\n- Total ODC: $odcCount\n- Total ODP: $odpCount\n\nJika pelanggan tanya lokasi, sarankan ketik 'lok [nama]' atau 'lokasi [nama]'.";
 
-        $adminNum = env('WHATSAPP_ADMIN_NUMBER', '6282187827382');
+        $adminNum = env('WHATSAPP_ADMIN_NUMBER');
         $systemInstruction = "Anda adalah R-Care, Customer Service AI resmi dari Rozitech (https://rozitech.co.id).
         Tugas Anda adalah melayani pelanggan Rozitech Network (Layanan Internet/WiFi).
 
@@ -991,7 +991,7 @@ class WhatsappController extends Controller
         $incomingMsg = trim($message);
         if (preg_match('/^!train\s+/i', $incomingMsg)) {
             // DYNAMIC ADMIN CHECK
-            $adminNumbers = explode(',', env('WHATSAPP_ADMIN_NUMBER', '6282187827382'));
+            $adminNumbers = explode(',', env('WHATSAPP_ADMIN_NUMBER'));
             $adminIds = explode(',', env('WHATSAPP_ADMIN_IDS', '117849758691352,251749826822171'));
             $adminNames = explode(',', strtolower(env('WHATSAPP_ADMIN_NAMES', 'rozitech,kang digital,admin')));
             

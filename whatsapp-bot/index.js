@@ -498,12 +498,57 @@ app.delete('/session/:id', requireSecret, async (req, res) => {
     res.json({ success: true, message: `Sesi ${cleanId} dihapus` });
 });
 
+// ─── Message Queueing to prevent rate limits & timeouts ───────────────────────
+const messageQueue = [];
+let isProcessingQueue = false;
+
+async function processQueue() {
+    if (isProcessingQueue) return;
+    isProcessingQueue = true;
+
+    while (messageQueue.length > 0) {
+        const item = messageQueue[0];
+        const { sock, jid, payload, resolve, reject, cleanPhone, isAsync } = item;
+        try {
+            console.log(`[QUEUE] Sending message to ${cleanPhone}...`);
+            await sock.sendMessage(jid, payload);
+            console.log(`[QUEUE] Success to ${cleanPhone}`);
+            if (!isAsync) {
+                resolve({ success: true, to: cleanPhone });
+            }
+        } catch (e) {
+            console.error(`[QUEUE] Error to ${cleanPhone}:`, e.message);
+            if (!isAsync) {
+                reject(e);
+            }
+        }
+        messageQueue.shift(); // Remove from queue after processing
+        
+        // Anti-ban delay: 20 to 30 seconds
+        const delay = Math.floor(Math.random() * 10000) + 20000;
+        await sleep(delay);
+    }
+
+    isProcessingQueue = false;
+}
+
+function queueMessage(sock, jid, payload, cleanPhone, isAsync) {
+    return new Promise((resolve, reject) => {
+        messageQueue.push({ sock, jid, payload, resolve, reject, cleanPhone, isAsync });
+        if (isAsync) {
+            resolve({ success: true, queued: true, to: cleanPhone });
+        }
+        processQueue();
+    });
+}
+
 /**
  * POST /send-message — kirim pesan teks / file
- * Body: { phone, message, sessionId, media, filename, mimetype, url }
+ * Body: { phone, message, sessionId, media, filename, mimetype, url, async }
  */
 app.post('/send-message', requireSecret, async (req, res) => {
     const { phone, message, sessionId, media, filename, mimetype, url, caption } = req.body;
+    const isAsync = req.body.async === true || req.body.async === 'true';
 
     if (!phone) return res.status(400).json({ error: 'phone wajib diisi' });
 
@@ -533,40 +578,44 @@ app.post('/send-message', requireSecret, async (req, res) => {
     }
 
     try {
+        let payload = null;
+
         // ── Kirim File via URL ──
         if (url && filename) {
             const fileResp = await axiosInstance.get(url, { responseType: 'arraybuffer', timeout: 30000 });
             const buffer   = Buffer.from(fileResp.data);
             const mime     = mimetype || fileResp.headers['content-type'] || 'application/octet-stream';
-            await sock.sendMessage(jid, {
+            payload = {
                 document: buffer,
                 mimetype: mime,
                 fileName: filename,
                 caption: caption || message || ''
-            });
-            return res.json({ success: true, to: cleanPhone });
+            };
         }
-
         // ── Kirim File via Base64 ──
-        if (media && filename) {
+        else if (media && filename) {
             const buffer = Buffer.from(media, 'base64');
             const mime   = mimetype || 'application/octet-stream';
-            await sock.sendMessage(jid, {
+            payload = {
                 document: buffer,
                 mimetype: mime,
                 fileName: filename,
                 caption: caption || message || ''
-            });
-            return res.json({ success: true, to: cleanPhone });
+            };
         }
-
         // ── Kirim Teks ──
-        if (message) {
-            await sock.sendMessage(jid, { text: message });
-            return res.json({ success: true, to: cleanPhone });
+        else if (message) {
+            payload = { text: message };
         }
 
-        return res.status(400).json({ error: 'Butuh message, media+filename, atau url+filename' });
+        if (!payload) {
+            return res.status(400).json({ error: 'Butuh message, media+filename, atau url+filename' });
+        }
+
+        // Gunakan antrean (queue) pesan agar stabil dan aman dari limit/rate limit
+        const result = await queueMessage(sock, jid, payload, cleanPhone, isAsync);
+        return res.json(result);
+
     } catch (e) {
         console.error('[SEND] Error:', e.message);
         res.status(500).json({ error: e.message });

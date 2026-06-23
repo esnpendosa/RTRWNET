@@ -80,11 +80,8 @@ class SendBillingReminders extends Command
                 $message .= "Abaikan pesan ini jika Anda sudah melakukan pembayaran. Terima kasih.";
 
                 try {
-                    $waClient->sendMessage($p->no_wa, ['text' => $message]);
+                    $waClient->sendMessage($p->no_wa, ['text' => $message], true);
                     $sentCount++;
-                    
-                    // Jeda 3-5 detik untuk mencegah spam & connection drops
-                    sleep(rand(3, 5));
                 } catch (\Exception $e) {
                     \Illuminate\Support\Facades\Log::error('Gagal kirim reminder tagihan: ' . $e->getMessage());
                 }

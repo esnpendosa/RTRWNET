@@ -637,4 +637,78 @@ class PelangganController extends Controller
             'next_number' => $nextNum
         ]);
     }
+
+    public function monitoring()
+    {
+        return view('content.pelanggan.monitoring');
+    }
+
+    public function monitoringData()
+    {
+        // Tampilkan SEMUA pelanggan (aktif maupun nonaktif, ada router maupun tidak)
+        // agar monitoring bisa memantau seluruh 400+ data pelanggan
+        $pelanggans = Pelanggan::orderBy('kode_pelanggan')
+            ->get()
+            ->map(function ($p) {
+                return [
+                    'id_pelanggan'       => $p->id_pelanggan,
+                    'kode_pelanggan'     => $p->kode_pelanggan,
+                    'nama_pelanggan'     => $p->nama_pelanggan,
+                    'ip_address'         => $p->ip_address ?: '-',
+                    'last_online_status' => (bool)$p->last_online_status,
+                    'last_ping_at'       => $p->last_ping_at
+                                            ? \Carbon\Carbon::parse($p->last_ping_at)->diffForHumans()
+                                            : 'Belum dipindai',
+                    'mikrotik_username'  => $p->mikrotik_username ?: '-',
+                    'mikrotik_type'      => strtoupper($p->mikrotik_type ?: '-'),
+                    'is_active'          => (bool)$p->is_active,
+                    'paket'              => $p->paket ?: '-',
+                    'harga_layanan'      => $p->harga_layanan,
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'total'   => $pelanggans->count(),
+            'data'    => $pelanggans,
+        ]);
+    }
+
+    public function pingPelanggan(Pelanggan $pelanggan)
+    {
+        $router = $pelanggan->router;
+        $currentIp = null;
+        
+        if ($pelanggan->id_router && $router && $pelanggan->mikrotik_username) {
+            $mikrotik = app(MikrotikService::class);
+            $currentIp = $mikrotik->getPelangganActiveIp($router, $pelanggan->mikrotik_username, $pelanggan->mikrotik_type);
+            if ($currentIp === 'ROUTER_OFFLINE') {
+                $currentIp = null;
+            }
+        }
+
+        if (!$currentIp && $pelanggan->ip_address) {
+            $host = $pelanggan->ip_address;
+            $pingCommand = (PHP_OS_FAMILY === 'Windows') ? "ping -n 1 -w 1000 $host" : "ping -c 1 -W 1 $host";
+            exec($pingCommand, $output, $resultCode);
+            if ($resultCode === 0) {
+                $currentIp = $host;
+            }
+        }
+
+        $isOnline = $currentIp ? true : false;
+
+        $pelanggan->update([
+            'ip_address' => $currentIp ?: $pelanggan->ip_address,
+            'last_online_status' => $isOnline,
+            'last_ping_at' => now()
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'is_online' => $isOnline,
+            'ip_address' => $pelanggan->ip_address ?: '-',
+            'last_ping_at' => $pelanggan->last_ping_at ? \Carbon\Carbon::parse($pelanggan->last_ping_at)->diffForHumans() : '-'
+        ]);
+    }
 }
