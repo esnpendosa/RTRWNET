@@ -3,33 +3,35 @@
 
 > **Skripsi** — Universitas Muhammadiyah Gresik (UMG)  
 > **Penulis**: Muhammad As'ad Muhibbin Akbar  
-> **Fokus**: Web GIS, Integrasi AI, Klasifikasi Naive Bayes & Optimasi Jaringan
+> **Fokus**: Web GIS, Integrasi AI, Klasifikasi Naive Bayes & Optimasi Jaringan  
+> **Repository**: https://github.com/esnpendosa/RTRWNET
 
 ---
 
 ## 📋 Daftar Isi
 
-- [Tentang Sistem](#tentang-sistem)
-- [Fitur Utama](#fitur-utama)
-- [Teknologi yang Digunakan](#teknologi-yang-digunakan)
-- [Persyaratan Sistem](#persyaratan-sistem)
-- [Panduan Instalasi](#panduan-instalasi)
-- [Konfigurasi Environment](#konfigurasi-environment)
-- [Menjalankan Sistem](#menjalankan-sistem)
-- [Panduan Penggunaan](#panduan-penggunaan)
-- [Panduan WhatsApp Bot](#panduan-whatsapp-bot)
-- [Panduan Training AI](#panduan-training-ai)
-- [Troubleshooting](#troubleshooting)
+1. [Tentang Sistem](#-tentang-sistem)
+2. [Fitur Utama](#-fitur-utama)
+3. [Teknologi yang Digunakan](#-teknologi-yang-digunakan)
+4. [Persyaratan Sistem](#-persyaratan-sistem)
+5. [Panduan Instalasi](#-panduan-instalasi)
+6. [Konfigurasi Environment](#-konfigurasi-environment)
+7. [Menjalankan Sistem](#-menjalankan-sistem)
+8. [Panduan Penggunaan](#-panduan-penggunaan)
+9. [Panduan WhatsApp Bot](#-panduan-whatsapp-bot)
+10. [Panduan Training AI (R-Care)](#-panduan-training-ai-r-care)
+11. [Troubleshooting](#-troubleshooting)
+12. [Struktur Direktori](#-struktur-direktori)
 
 ---
 
 ## 📖 Tentang Sistem
 
-**Rozitech WiFi Manager** adalah sistem manajemen jaringan RTRWNet berbasis web yang mengintegrasikan:
+**Rozitech WiFi Manager** adalah sistem manajemen jaringan RTRWNet berbasis web yang dikembangkan sebagai tugas akhir (skripsi) di Universitas Muhammadiyah Gresik. Sistem ini mengintegrasikan:
 
 - 🗺️ **Web GIS** — Peta interaktif untuk manajemen lokasi pelanggan
-- 🤖 **AI Chatbot (R-Care)** — Bot WhatsApp otomatis dengan kecerdasan buatan
-- 📊 **Klasifikasi Naive Bayes** — Klasifikasi tingkat kesejahteraan pelanggan
+- 🤖 **AI Chatbot (R-Care)** — Bot WhatsApp otomatis berbasis kecerdasan buatan
+- 📊 **Klasifikasi Naive Bayes** — Klasifikasi tingkat kesejahteraan pelanggan berdasarkan data sosial-ekonomi
 - 💳 **Billing Otomatis** — Tagihan, OCR verifikasi transfer, dan isolir otomatis Mikrotik
 
 ---
@@ -52,6 +54,7 @@
 - Klasifikasi tingkat kesejahteraan pelanggan berdasarkan kriteria ekonomis
 - Evaluasi akurasi dengan Confusion Matrix, Precision, Recall, dan F1-Score
 - Training data dan test data terpisah untuk validasi model
+- Hanya admin tunggal yang bisa akses dan mengelola sistem
 
 ### 4. 🗺️ Web GIS & Peta
 - Peta interaktif pelanggan menggunakan Leaflet.js
@@ -84,17 +87,17 @@
 
 ## 📦 Persyaratan Sistem
 
-Pastikan perangkat Anda memenuhi persyaratan berikut sebelum instalasi:
+Pastikan perangkat memenuhi persyaratan berikut sebelum instalasi:
 
 | Software | Versi Minimum | Keterangan |
 |---|---|---|
-| **PHP** | 8.2+ | Dengan ekstensi: `mbstring`, `openssl`, `pdo`, `tokenizer`, `xml`, `gd` |
+| **PHP** | 8.2+ | Ekstensi: `mbstring`, `openssl`, `pdo`, `tokenizer`, `xml`, `gd` |
 | **Composer** | 2.x | Dependency manager PHP |
 | **Node.js** | 18.x LTS | Untuk WhatsApp Bot & Vite |
 | **NPM** | 9.x+ | Otomatis terinstal bersama Node.js |
 | **MySQL** | 8.0+ | Database utama |
 | **Git** | 2.x+ | Version control |
-| **PM2** | Latest | Process manager untuk bot (opsional, direkomendasikan) |
+| **PM2** | Latest | Process manager bot (direkomendasikan) |
 
 > **💡 Rekomendasi**: Gunakan **Laragon** di Windows atau **XAMPP** sebagai local server.
 
@@ -105,13 +108,8 @@ Pastikan perangkat Anda memenuhi persyaratan berikut sebelum instalasi:
 ### Langkah 1 — Clone Repositori
 
 ```bash
-git clone https://github.com/username/rozitech-wifi-manager.git
-cd rozitech-wifi-manager
-```
-
-Atau jika menggunakan Laragon, taruh folder project di:
-```
-C:\laragon\www\skripsi
+git clone git@github.com:esnpendosa/RTRWNET.git skripsi
+cd skripsi
 ```
 
 ---
@@ -122,19 +120,19 @@ C:\laragon\www\skripsi
 composer install
 ```
 
-> Proses ini akan mengunduh semua package PHP yang diperlukan ke folder `vendor/`.
+> Perintah ini mengunduh semua package PHP yang diperlukan ke folder `vendor/`.
 
 ---
 
 ### Langkah 3 — Konfigurasi Environment Laravel
 
-Salin file `.env.example` menjadi `.env`:
+Salin file contoh environment:
 
 ```bash
 cp .env.example .env
 ```
 
-Kemudian buka file `.env` dan sesuaikan konfigurasinya (lihat bagian [Konfigurasi Environment](#konfigurasi-environment)).
+Kemudian edit file `.env` sesuai konfigurasi lokal Anda (lihat bagian [Konfigurasi Environment](#-konfigurasi-environment)).
 
 ---
 
@@ -183,15 +181,9 @@ npm install
 
 ### Langkah 8 — Instalasi WhatsApp Bot
 
-Masuk ke folder bot dan instal dependensinya:
-
 ```bash
 cd whatsapp-bot
 npm install
-```
-
-Salin file environment bot:
-```bash
 cp .env.example .env
 ```
 
@@ -203,36 +195,34 @@ Kemudian konfigurasi file `whatsapp-bot/.env` (lihat bagian [Konfigurasi Bot](#2
 
 ### 1. Konfigurasi Laravel (`.env`)
 
-Buka file `.env` di root project dan isi nilai-nilai berikut:
-
 ```env
-# ── Aplikasi ────────────────────────────────────────
+# ── Aplikasi ────────────────────────────────────────────
 APP_NAME="Rozitech WiFi Manager"
-APP_ENV=local           # Ganti ke 'production' saat deploy
-APP_KEY=                # Diisi otomatis oleh: php artisan key:generate
-APP_DEBUG=true          # Ganti ke 'false' saat production
-APP_URL=http://localhost # Ganti ke URL publik saat deploy (misal: https://net.rozitech.co.id)
+APP_ENV=local            # Ganti ke 'production' saat deploy
+APP_KEY=                 # Diisi otomatis: php artisan key:generate
+APP_DEBUG=true           # Ganti ke 'false' saat production
+APP_URL=http://localhost  # Ganti ke URL publik saat deploy
 
-# ── Database ─────────────────────────────────────────
+# ── Database ─────────────────────────────────────────────
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
 DB_PORT=3306
-DB_DATABASE=rozitech_wifi   # Nama database yang sudah dibuat
+DB_DATABASE=rozitech_wifi   # Nama database yang dibuat
 DB_USERNAME=root             # Username MySQL
-DB_PASSWORD=                 # Password MySQL (kosong jika default Laragon)
+DB_PASSWORD=                 # Password MySQL (kosong = default Laragon)
 
-# ── WhatsApp Bot ──────────────────────────────────────
-BOT_URL=http://127.0.0.1:3000       # URL WhatsApp bot berjalan
+# ── WhatsApp Bot ──────────────────────────────────────────
+BOT_URL=http://127.0.0.1:3000        # URL bot berjalan
 BOT_SECRET=rozitech-bot-secret-2024  # Secret key (harus sama dengan bot)
 
-# ── OpenRouter AI (untuk Chatbot R-Care) ──────────────
-OPENROUTER_API_KEY=sk-or-xxxxxxxxxxxx   # Dapatkan di: https://openrouter.ai
-OPENROUTER_MODEL=google/gemini-flash-1.5 # Model AI yang digunakan
+# ── OpenRouter AI ─────────────────────────────────────────
+OPENROUTER_API_KEY=sk-or-xxxxxxxxxxxx    # Dapatkan di: https://openrouter.ai
+OPENROUTER_MODEL=google/gemini-flash-1.5
 
-# ── Midtrans (Payment Gateway) ────────────────────────
+# ── Midtrans (Payment Gateway) ────────────────────────────
 MIDTRANS_SERVER_KEY=SB-Mid-server-xxxxx
 MIDTRANS_CLIENT_KEY=SB-Mid-client-xxxxx
-MIDTRANS_IS_PRODUCTION=false  # Ganti ke 'true' saat production
+MIDTRANS_IS_PRODUCTION=false  # Ganti 'true' saat production
 ```
 
 ---
@@ -240,11 +230,11 @@ MIDTRANS_IS_PRODUCTION=false  # Ganti ke 'true' saat production
 ### 2. Konfigurasi WhatsApp Bot (`whatsapp-bot/.env`)
 
 ```env
-BOT_PORT=3000                                   # Port bot berjalan
-BOT_SECRET=rozitech-bot-secret-2024             # Harus SAMA dengan BOT_SECRET di Laravel .env
-APP_URL=http://127.0.0.1:8000                   # URL Laravel (local) atau URL publik saat deploy
-WHATSAPP_ADMIN_NUMBER=6281234567890@s.whatsapp.net  # Nomor admin (format: 628xxx@s.whatsapp.net)
-ALLOWED_SESSIONS=main                           # Nama sesi WhatsApp
+BOT_PORT=3000                                        # Port bot berjalan
+BOT_SECRET=rozitech-bot-secret-2024                  # HARUS SAMA dengan Laravel .env
+APP_URL=http://127.0.0.1:8000                        # URL Laravel
+WHATSAPP_ADMIN_NUMBER=6281234567890@s.whatsapp.net   # Nomor admin (format: 628xxx@s.whatsapp.net)
+ALLOWED_SESSIONS=main                                # Nama sesi WhatsApp
 ```
 
 > **⚠️ Penting**: Nilai `BOT_SECRET` di `.env` Laravel dan `whatsapp-bot/.env` **harus identik**.
@@ -255,19 +245,19 @@ ALLOWED_SESSIONS=main                           # Nama sesi WhatsApp
 
 ### Mode Development (Lokal)
 
-Jalankan semua service secara bersamaan dengan perintah ini di root project:
+Jalankan semua service sekaligus dari root project:
 
 ```bash
 composer run dev
 ```
 
-Perintah ini akan menjalankan sekaligus:
+Perintah ini menjalankan bersamaan:
 - `php artisan serve` — Server Laravel di `http://127.0.0.1:8000`
-- `npm run dev` — Vite untuk hot-reload aset frontend
-- `php artisan queue:listen` — Worker antrean (untuk notifikasi, dll.)
+- `npm run dev` — Vite hot-reload untuk aset frontend
+- `php artisan queue:listen` — Worker antrean notifikasi
 - `php artisan pail` — Log viewer real-time
 
-Kemudian, buka terminal **baru** untuk menjalankan WhatsApp bot:
+Buka terminal **baru** untuk menjalankan WhatsApp bot:
 
 ```bash
 cd whatsapp-bot
@@ -276,7 +266,7 @@ node index.js
 
 ---
 
-### Mode Production (Server)
+### Mode Production (Server/VPS)
 
 **A. Build aset frontend:**
 ```bash
@@ -290,12 +280,12 @@ php artisan route:cache
 php artisan view:cache
 ```
 
-**C. Jalankan Bot dengan PM2 (agar tetap hidup di background):**
+**C. Jalankan Bot dengan PM2:**
 ```bash
 cd whatsapp-bot
 pm2 start index.js --name whatsapp-bot
 pm2 save
-pm2 startup  # Agar bot otomatis start saat server reboot
+pm2 startup   # Agar bot otomatis start saat server reboot
 ```
 
 **D. Jalankan Queue Worker dengan PM2:**
@@ -312,12 +302,12 @@ pm2 save
 ### Akses Dashboard
 
 Setelah sistem berjalan, buka browser dan akses:
-- **Local**: `http://localhost/skripsi/public` atau `http://127.0.0.1:8000`
-- **Production**: `https://net.rozitech.co.id`
+- **Local**: `http://127.0.0.1:8000` atau `http://localhost/skripsi/public`
+- **Production**: URL domain yang dikonfigurasi
 
 ### Login Admin
 
-Gunakan akun admin yang telah dikonfigurasi. Hanya ada **satu akun admin** dalam sistem.
+Sistem hanya memiliki **satu akun admin**. Gunakan akun yang telah dikonfigurasi saat setup.
 
 ---
 
@@ -325,7 +315,7 @@ Gunakan akun admin yang telah dikonfigurasi. Hanya ada **satu akun admin** dalam
 
 | Menu | Fungsi |
 |---|---|
-| **Dashboard** | Statistik ringkasan: pelanggan aktif, pendapatan bulan ini, tagihan jatuh tempo |
+| **Dashboard** | Statistik ringkasan: pelanggan aktif, pendapatan, tagihan jatuh tempo |
 | **Pelanggan** | Kelola data pelanggan, paket, dan status aktif/isolir |
 | **Tagihan** | Lihat semua tagihan, tandai lunas, generate nota PDF |
 | **Pembayaran** | Verifikasi bukti transfer dengan OCR otomatis |
@@ -343,7 +333,7 @@ Gunakan akun admin yang telah dikonfigurasi. Hanya ada **satu akun admin** dalam
 1. Buka menu **Pelanggan** → **Tambah Pelanggan**
 2. Isi data: Nama, No. HP (format `628xxx`), Alamat, Koordinat GPS, Paket
 3. Klik **Simpan** — sistem otomatis membuat tagihan bulan pertama
-4. Pelanggan akan mendapat notifikasi WhatsApp otomatis
+4. Pelanggan mendapat notifikasi WhatsApp otomatis
 
 ---
 
@@ -352,7 +342,7 @@ Gunakan akun admin yang telah dikonfigurasi. Hanya ada **satu akun admin** dalam
 1. Buka menu **Pembayaran** → **Verifikasi Transfer**
 2. Upload foto/struk bukti transfer dari pelanggan
 3. Sistem OCR membaca nominal dan tanggal secara otomatis
-4. Konfirmasi hasil OCR dan klik **Tandai Lunas**
+4. Konfirmasi hasil OCR → klik **Tandai Lunas**
 5. Nota PDF otomatis dikirim ke WhatsApp pelanggan
 
 ---
@@ -360,9 +350,9 @@ Gunakan akun admin yang telah dikonfigurasi. Hanya ada **satu akun admin** dalam
 ### Klasifikasi Naive Bayes
 
 1. Buka menu **Klasifikasi** → **Data Training**
-2. Upload atau input data pelanggan sebagai data latih
+2. Input atau upload data pelanggan sebagai data latih
 3. Buka tab **Training & Evaluasi** → klik **Mulai Training**
-4. Sistem akan mengevaluasi menggunakan data test
+4. Sistem mengevaluasi menggunakan data test (`data_latih = 0`)
 5. Lihat hasil: **Confusion Matrix**, **Precision**, **Recall**, **F1-Score**
 
 ---
@@ -372,19 +362,16 @@ Gunakan akun admin yang telah dikonfigurasi. Hanya ada **satu akun admin** dalam
 ### Menghubungkan WhatsApp
 
 1. Buka menu **WhatsApp** di Dashboard
-2. Klik **Mulai Sesi** — akan muncul QR Code
-3. Buka WhatsApp di HP → **Perangkat Tertaut** → **Tautkan Perangkat**
-4. Scan QR Code yang muncul
+2. Klik **Mulai Sesi** — muncul QR Code
+3. Buka WhatsApp di HP → **⋮ Menu** → **Perangkat Tertaut** → **Tautkan Perangkat**
+4. Scan QR Code yang tampil di layar
 5. Tunggu status berubah menjadi **🟢 Terhubung**
 
-> **💡 Alternatif**: Gunakan **Pairing Code** jika kamera tidak tersedia.  
-> Masukkan nomor HP dan gunakan kode yang digenerate sistem di WhatsApp > Perangkat Tertaut > Tautkan dengan Nomor Telepon.
+> **💡 Alternatif — Pairing Code**: Jika kamera tidak tersedia, masukkan nomor HP dan gunakan kode yang digenerate sistem, lalu di WhatsApp pilih: Perangkat Tertaut → Tautkan dengan Nomor Telepon.
 
 ---
 
 ### Perintah Bot untuk Pelanggan
-
-Pelanggan dapat mengirim pesan berikut ke nomor WhatsApp bisnis:
 
 | Perintah | Fungsi |
 |---|---|
@@ -393,7 +380,7 @@ Pelanggan dapat mengirim pesan berikut ke nomor WhatsApp bisnis:
 | `bayar` | Panduan cara pembayaran |
 | `lapor gangguan` | Laporkan gangguan internet |
 | `paket` | Informasi paket yang tersedia |
-| `lokasi [nama]` | Cari lokasi berdasarkan GPS |
+| `lokasi [nama]` | Cari lokasi berdasarkan koordinat GPS |
 | `lok [nama]` | Cari lokasi via Google Maps URL |
 
 ---
@@ -403,33 +390,64 @@ Pelanggan dapat mengirim pesan berikut ke nomor WhatsApp bisnis:
 1. Buka menu **WhatsApp** → **Broadcast**
 2. Pilih target: semua pelanggan / pelanggan tertentu / nomor manual
 3. Tulis pesan (bisa sertakan gambar/PDF)
-4. Klik **Kirim** — pesan masuk antrean dengan jeda anti-ban otomatis
+4. Klik **Kirim** — pesan masuk antrean dengan jeda anti-ban otomatis (20–30 detik per pesan)
 
 ---
 
 ## 🧠 Panduan Training AI (R-Care)
 
-Admin dapat melatih bot melalui chat WhatsApp langsung:
+Admin dapat melatih bot langsung melalui chat WhatsApp tanpa perlu masuk ke sistem.
 
 ### Format Perintah
 
 ```
-!train [kata kunci] | [jawaban]
+!train [kata kunci] | [jawaban yang diinginkan]
 ```
 
-### Contoh
+> **Penting**: Gunakan tanda pemisah pipa `|` di antara kata kunci dan jawaban.  
+> Hanya nomor yang terdaftar sebagai admin (`WHATSAPP_ADMIN_NUMBER`) yang dapat menggunakan perintah ini.
 
+---
+
+### Contoh Penggunaan
+
+**Menambahkan informasi paket:**
 ```
-!train paket super | Paket Super Rozitech 50Mbps harga Rp 350.000/bulan. Info lebih lanjut hubungi admin ya Kak! 😊
-
-!train cara bayar | Pembayaran bisa via Transfer Bank Mandiri No. 1234567890 a/n Rozitech Network. Setelah transfer, kirim foto struk ke sini ya Kak!
-
-!train jam operasional | Kami melayani Senin–Sabtu pukul 08.00–17.00 WIB. Di luar jam tersebut silakan tinggalkan pesan, kami akan segera merespons! 🙏
+!train paket super | Paket Super Rozitech kecepatannya 50Mbps harga Rp 350.000/bulan nggih Kak 😊
 ```
 
-> **⚠️ Catatan**: Hanya nomor admin yang terdaftar (`WHATSAPP_ADMIN_NUMBER`) yang bisa menggunakan perintah `!train`.
+**Menambahkan info cara bayar:**
+```
+!train cara bayar | Pembayaran saged lewat Transfer Bank Mandiri (1234567890) a.n Rozitech Network. Setelah transfer, kirim foto struk ke sini ya Kak. Matur nuwun 🙏
+```
 
-Setelah melatih, bot akan membalas: **"Berhasil Melatih R-Care! ✅"**
+**Menambahkan identitas AI:**
+```
+!train siapa kamu | Saya R-Care, asisten personal Rozitech Network. Ada yang bisa saya bantu?
+```
+
+**Menambahkan sapaan bahasa Jawa:**
+```
+!train sapaan jawa | Sugeng siang Kak, wonten ingkang saged R-Care bantu babagan internet?
+```
+
+---
+
+### Tips Training Efektif
+
+1. **Kata Kunci Singkat** — Gunakan kata yang sering ditanyakan pelanggan (misal: `harga`, `gangguan`, `lokasi`)
+2. **Jawaban Lengkap** — Tuliskan jawaban sedetail mungkin agar pelanggan tidak perlu bertanya ulang
+3. **Bahasa Manusiawi** — Tuliskan jawaban seolah sedang berbicara langsung dengan pelanggan
+4. **Gunakan Emoji** — Emoji membuat pesan terasa lebih ramah dan tidak kaku
+
+---
+
+### Verifikasi Training
+
+Setelah mengirim `!train`, bot akan membalas:
+> **Berhasil Melatih R-Care! ✅**
+
+Langsung tes dengan mengirim kata kunci tersebut via chat biasa untuk memastikan bot merespons dengan benar.
 
 ---
 
@@ -437,26 +455,29 @@ Setelah melatih, bot akan membalas: **"Berhasil Melatih R-Care! ✅"**
 
 ### ❌ Bot WhatsApp Tidak Terhubung
 
-**Gejala**: Status bot selalu `connecting` atau `qr`.
+**Gejala**: Status bot selalu `connecting` atau terus menampilkan QR.
 
 **Solusi**:
-1. Cek apakah bot berjalan: `pm2 status` atau cek terminal
-2. Pastikan server Laravel bisa diakses dari bot (`APP_URL` di `whatsapp-bot/.env`)
+1. Pastikan bot berjalan: cek terminal atau `pm2 status`
+2. Pastikan Laravel bisa diakses dari bot (cek `APP_URL` di `whatsapp-bot/.env`)
 3. Hapus sesi lama dan scan ulang QR:
    ```bash
-   # Di folder whatsapp-bot
+   cd whatsapp-bot
+   # Hapus folder sesi
    rm -rf sessions/main
    node index.js
    ```
 
 ---
 
-### ❌ Error `php artisan migrate` — Database Not Found
+### ❌ Error saat `php artisan migrate`
+
+**Gejala**: `SQLSTATE[HY000] [1049] Unknown database`.
 
 **Solusi**:
-1. Pastikan MySQL berjalan (cek di Laragon/XAMPP)
-2. Pastikan database sudah dibuat: `CREATE DATABASE rozitech_wifi;`
-3. Cek konfigurasi `DB_HOST`, `DB_USERNAME`, `DB_PASSWORD` di `.env`
+1. Pastikan MySQL berjalan (cek Laragon/XAMPP Control Panel)
+2. Buat database terlebih dahulu: `CREATE DATABASE rozitech_wifi;`
+3. Cek nilai `DB_HOST`, `DB_USERNAME`, `DB_PASSWORD` di `.env`
 
 ---
 
@@ -465,7 +486,7 @@ Setelah melatih, bot akan membalas: **"Berhasil Melatih R-Care! ✅"**
 **Solusi**:
 1. Pastikan foto struk cerah, tidak buram, dan tidak terpotong
 2. Gunakan foto asli (bukan screenshot bertumpuk)
-3. Nominal harus terlihat jelas dengan format angka yang standar
+3. Nominal harus terlihat jelas dengan format angka standar
 
 ---
 
@@ -473,7 +494,7 @@ Setelah melatih, bot akan membalas: **"Berhasil Melatih R-Care! ✅"**
 
 **Solusi**:
 ```bash
-# Bersihkan cache
+# Bersihkan semua cache
 php artisan cache:clear
 php artisan config:clear
 php artisan view:clear
@@ -481,20 +502,20 @@ php artisan route:clear
 
 # Cek log error
 php artisan pail
-# atau
-tail -f storage/logs/laravel.log
+# atau buka langsung file log
+# storage/logs/laravel.log
 ```
 
 ---
 
-### ❌ Aset CSS/JS Tidak Muncul
+### ❌ Aset CSS/JS Tidak Muncul / Halaman Berantakan
 
 **Solusi**:
 ```bash
-# Mode development
+# Mode development (hot reload)
 npm run dev
 
-# Mode production
+# Mode production (build statis)
 npm run build
 ```
 
@@ -503,9 +524,9 @@ npm run build
 ### ❌ Notifikasi WhatsApp Tidak Terkirim
 
 **Solusi**:
-1. Cek status sesi di menu **WhatsApp** Dashboard
+1. Cek status sesi di menu **WhatsApp** Dashboard — pastikan **🟢 Terhubung**
 2. Pastikan Queue Worker berjalan: `php artisan queue:work`
-3. Cek log: `storage/logs/laravel.log`
+3. Cek log: buka `storage/logs/laravel.log`
 
 ---
 
@@ -514,33 +535,44 @@ npm run build
 ```
 skripsi/
 ├── app/
-│   ├── Http/Controllers/   # Controller Laravel
-│   ├── Models/             # Model Eloquent
-│   └── Services/           # Service classes (Mikrotik, WhatsApp, dll.)
+│   ├── Console/Commands/       # Scheduled tasks (billing, reminder, isolir)
+│   ├── Http/Controllers/       # Controller Laravel (Pelanggan, Tagihan, KNN, dll.)
+│   ├── Models/                 # Model Eloquent (Pelanggan, Tagihan, dll.)
+│   └── Services/               # Service class (Mikrotik, WhatsApp, KNN, dll.)
 ├── database/
-│   ├── migrations/         # Skema database
-│   └── seeders/            # Data awal
-├── public/                 # Aset publik (CSS, JS, images)
+│   ├── migrations/             # Skema database (buat/ubah tabel)
+│   └── seeders/                # Data awal (akun admin, dll.)
+├── public/                     # Aset publik (CSS, JS, gambar)
 ├── resources/
-│   └── views/              # Template Blade
+│   ├── menu/                   # Konfigurasi menu sidebar
+│   └── views/                  # Template Blade (halaman web)
+│       └── content/
+│           ├── knn/            # Halaman klasifikasi Naive Bayes
+│           └── pelanggan/      # Halaman manajemen pelanggan
 ├── routes/
-│   └── web.php             # Definisi route
-├── whatsapp-bot/           # WhatsApp Bot (Node.js)
-│   ├── index.js            # Entry point bot
-│   ├── sessions/           # Data sesi WhatsApp (auto-generated)
-│   └── .env                # Konfigurasi bot
-├── .env                    # Konfigurasi Laravel
-└── README.md               # Dokumentasi ini
+│   └── web.php                 # Definisi semua route/URL sistem
+├── whatsapp-bot/               # WhatsApp Bot (Node.js, terpisah dari Laravel)
+│   ├── index.js                # Entry point bot — logika utama
+│   ├── sessions/               # Data sesi WhatsApp (auto-generated, tidak di-commit)
+│   ├── .env.example            # Contoh konfigurasi bot
+│   └── package.json            # Dependensi Node.js
+├── .env.example                # Contoh konfigurasi Laravel
+├── composer.json               # Dependensi PHP
+├── package.json                # Dependensi frontend (Vite)
+└── README.md                   # Dokumentasi ini
 ```
 
 ---
 
 ## 📄 Lisensi
 
-Proyek ini dibuat untuk keperluan skripsi dan bersifat akademis.
+Proyek ini dikembangkan untuk keperluan akademis (Skripsi S1).
 
 ---
 
 **Author**: Muhammad As'ad Muhibbin Akbar  
+**NIM**: *(sesuaikan)*  
+**Program Studi**: Informatika  
 **Institusi**: Universitas Muhammadiyah Gresik (UMG)  
-**Status**: ✅ Production Ready & Thesis Verified
+**Tahun**: 2026  
+**Status Proyek**: ✅ Production Ready & Thesis Verified
