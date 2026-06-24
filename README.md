@@ -1,5 +1,5 @@
 # 🌐 Rozitech WiFi Manager
-### Sistem Manajemen Jaringan RTRWNet — Web GIS + AI Chatbot + Klasifikasi Naive Bayes
+### Sistem Manajemen Jaringan RTRWNet — Web GIS + AI Chatbot + KNN
 
 > **Skripsi** — Universitas Muhammadiyah Gresik (UMG)  
 > **Penulis**: Muhammad As'ad Muhibbin Akbar  
