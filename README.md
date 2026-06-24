@@ -3,7 +3,7 @@
 
 > **Skripsi** — Universitas Muhammadiyah Gresik (UMG)  
 > **Penulis**: Muhammad As'ad Muhibbin Akbar  
-> **Fokus**: Web GIS, Integrasi AI, Klasifikasi Naive Bayes & Optimasi Jaringan  
+> **Fokus**: Web GIS, Integrasi AI, KNN & Optimasi Jaringan  
 > **Repository**: https://github.com/esnpendosa/RTRWNET
 
 ---
