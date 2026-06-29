@@ -628,6 +628,74 @@ skripsi/
 └── README.md                   # Dokumentasi ini
 ```
 
+## 📱 REST API Integration (Flutter Mobile) ✅ (Terbaru)
+
+Aplikasi ini sekarang dilengkapi dengan REST API berbasis **Laravel Sanctum** untuk mendukung integrasi dengan Flutter Mobile App.
+
+### 🔑 Autentikasi & Header
+Seluruh endpoint (kecuali Login) dilindungi oleh middleware `auth:sanctum` dan memerlukan header berikut pada setiap HTTP request:
+```http
+Accept: application/json
+Authorization: Bearer <your_access_token>
+```
+
+### ⏱️ Rate Limiting & Keamanan
+*   **Rate Limit**: Maksimal 60 request per menit per token/IP.
+*   **CORS**: Terkonfigurasi untuk mengizinkan akses penuh dari aplikasi Flutter (`config/cors.php`).
+
+---
+
+### 📂 Daftar API Endpoint
+
+#### 1. Autentikasi
+*   `POST /api/auth/login` — Login pengguna (mengirim `username` atau `email` + `password`). Mengembalikan token akses.
+*   `POST /api/auth/logout` — Logout pengguna (merevokasi token saat ini).
+*   `GET /api/auth/me` — Mendapatkan profil pengguna yang sedang login.
+
+#### 2. Pelanggan
+*   `GET /api/pelanggan` — Mendapatkan daftar semua pelanggan.
+    *   *Query Parameters*: `search` (cari nama/no_wa/kode), `status` (`aktif`/`isolir`), `per_page` (paginasi).
+*   `GET /api/pelanggan/{id}` — Detail lengkap pelanggan beserta koordinat GPS.
+*   `GET /api/pelanggan/{id}/tagihan` — Riwayat seluruh tagihan pelanggan tertentu.
+*   `GET /api/pelanggan/{id}/tagihan/aktif` — Tagihan bulan berjalan/belum lunas terdekat.
+
+#### 3. Tagihan & Pembayaran
+*   `GET /api/tagihan` — Semua data tagihan.
+    *   *Query Parameters*: `status` (`paid`/`unpaid`), `bulan` (1-12), `tahun` (YYYY).
+*   `GET /api/tagihan/jatuh-tempo-hari-ini` — Tagihan yang jatuh tempo hari ini untuk trigger push notification di Flutter.
+    *   *Query Parameters*: `day` (opsional untuk simulasi hari), `force=true` (untuk override).
+*   `PATCH /api/tagihan/{id}/tandai-lunas` — Mengonfirmasi pelunasan tagihan secara manual (otomatis mengaktifkan status pelanggan di DB & sinkronisasi PPPoE/Hotspot secret di MikroTik).
+*   `GET /api/tagihan/statistik` — Statistik keuangan (total pendapatan bulan berjalan, total tunggakan, rasio pelunasan).
+
+#### 4. Dashboard, Laporan & GIS (Peta)
+*   `GET /api/dashboard` — Ringkasan dashboard: total pelanggan aktif, total pendapatan, jumlah tagihan jatuh tempo, dan pendaftaran baru.
+*   `GET /api/peta/pelanggan` — Mendapatkan seluruh koordinat Latitude & Longitude pelanggan untuk penandaan marker pada Google Maps/Flutter Maps.
+*   `GET /api/laporan/rekap-pembayaran` — Mengambil data rekap pembayaran pelanggan lengkap beserta total perhitungan keuangan untuk laporan di Flutter.
+    *   *Query Parameters*: `search` (cari nama/kode), `month` (1-12), `year` (YYYY), `status` (`paid`/`unpaid`), `metode_pembayaran`, `start_date`, `end_date`.
+
+---
+
+### 📄 Standardisasi Response JSON
+
+#### Response Sukses (HTTP 200/201)
+```json
+{
+  "status": true,
+  "message": "Berhasil",
+  "data": { ... },
+  "meta": { "current_page": 1, "total": 100 } // Ada jika response menggunakan paginasi
+}
+```
+
+#### Response Error (HTTP 400/401/403/422)
+```json
+{
+  "status": false,
+  "message": "Pesan deskripsi error",
+  "errors": { ... } // Opsional, berisi daftar error validasi jika HTTP 422
+}
+```
+
 ---
 
 ## 📄 Lisensi

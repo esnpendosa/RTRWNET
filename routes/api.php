@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\PelangganController;
 use App\Http\Controllers\Api\TagihanController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\PetaController;
+use App\Http\Controllers\Api\LaporanController as ApiLaporanController;
 
 /*
 |--------------------------------------------------------------------------
@@ -52,4 +53,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
 
     // GIS/Peta endpoints
     Route::get('peta/pelanggan', [PetaController::class, 'pelanggan']);
+
+    // Laporan endpoints
+    Route::get('laporan/rekap-pembayaran', [ApiLaporanController::class, 'rekapPembayaran']);
 });
