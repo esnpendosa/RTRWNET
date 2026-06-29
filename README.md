@@ -86,8 +86,9 @@ Authorization: Bearer <your_access_token>
 8. [Panduan Penggunaan](#-panduan-penggunaan)
 9. [Panduan WhatsApp Bot](#-panduan-whatsapp-bot)
 10. [Panduan Training AI (R-Care)](#-panduan-training-ai-r-care)
-11. [Troubleshooting](#-troubleshooting)
-12. [Struktur Direktori](#-struktur-direktori)
+11. [Integrasi REST API (Flutter Mobile)](#-rest-api-integration-flutter-mobile)
+12. [Troubleshooting](#-troubleshooting)
+13. [Struktur Direktori](#-struktur-direktori)
 
 ---
 
