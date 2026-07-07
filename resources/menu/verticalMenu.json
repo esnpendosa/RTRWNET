@@ -126,6 +126,18 @@
       "permission": "billing_view"
     },
     {
+      "url": "/upgrade-paket",
+      "name": "Upgrade Paket WiFi",
+      "icon": "menu-icon icon-base bx bx-chevrons-up",
+      "slug": "upgrade-paket"
+    },
+    {
+      "url": "/tutorial",
+      "name": "Tutorial Modem",
+      "icon": "menu-icon icon-base bx bx-book-open",
+      "slug": "tutorial"
+    },
+    {
       "url": "/keuangan",
       "name": "Keuangan & PSB",
       "icon": "menu-icon icon-base bx bx-calculator",

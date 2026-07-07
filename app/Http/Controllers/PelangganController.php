@@ -397,7 +397,8 @@ class PelangganController extends Controller
     {
         // Security check
         $user = auth()->user();
-        if (!in_array($user->id_role, [1, 2]) && $pelanggan->id_user != $user->id) {
+        $isAdminOrManager = ($user->role && in_array($user->role->name, ['Admin', 'Manajer'])) || in_array($user->id_role, [1, 2]);
+        if (!$isAdminOrManager && $pelanggan->id_user != $user->id) {
             abort(403, 'Unauthorized action.');
         }
 

@@ -101,7 +101,6 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/pelanggan/monitoring', [PelangganController::class, 'monitoring'])->name('pelanggan.monitoring');
         Route::get('/pelanggan/monitoring-data', [PelangganController::class, 'monitoringData'])->name('pelanggan.monitoring.data');
         Route::post('/pelanggan/{pelanggan}/ping', [PelangganController::class, 'pingPelanggan'])->name('pelanggan.ping');
-        Route::get('/pelanggan/{pelanggan}/card', [PelangganController::class, 'card'])->name('pelanggan.card');
         Route::get('pelanggan/{pelanggan}/delete-direct', [PelangganController::class, 'destroyDirect'])->name('pelanggan.destroy-direct');
         Route::resource('pelanggan', PelangganController::class);
         Route::resource('odc-odp', OdcOdpController::class);
@@ -116,6 +115,7 @@ Route::middleware(['auth'])->group(function () {
 
     // Customer Routes
     Route::get('my-connection', [PelangganController::class, 'myConnection'])->name('pelanggan.my-connection');
+    Route::get('/pelanggan/{pelanggan}/card', [PelangganController::class, 'card'])->name('pelanggan.card');
 
     // KNN
     Route::middleware('can:knn_process')->group(function() {
@@ -187,6 +187,8 @@ Route::middleware(['auth'])->group(function () {
     Route::get('billing/sync', [\App\Http\Controllers\TagihanController::class, 'generateMonthlyBills'])->name('billing.sync');
     Route::put('billing/{tagihan}/amount', [\App\Http\Controllers\TagihanController::class, 'updateAmount'])->name('billing.amount.update');
     Route::put('billing/{tagihan}', [\App\Http\Controllers\TagihanController::class, 'update'])->name('billing.update');
+    Route::get('billing/{tagihan}/edit-bukti-bayar', [\App\Http\Controllers\TagihanController::class, 'showEditBuktiBayar'])->name('billing.edit-bukti-bayar');
+    Route::put('billing/{tagihan}/edit-bukti-bayar', [\App\Http\Controllers\TagihanController::class, 'editBuktiBayar'])->name('billing.update-bukti-bayar');
     Route::delete('billing/delete-all', [\App\Http\Controllers\TagihanController::class, 'deleteAll'])->name('billing.delete-all');
     Route::delete('billing/{tagihan}', [\App\Http\Controllers\TagihanController::class, 'destroy'])->name('billing.destroy');
     Route::get('billing/delete-all-direct', [\App\Http\Controllers\TagihanController::class, 'deleteAllDirect'])->name('billing.delete-all-direct');
@@ -194,6 +196,27 @@ Route::middleware(['auth'])->group(function () {
     Route::get('billing/{tagihan}/receipt', [\App\Http\Controllers\TagihanController::class, 'downloadReceipt'])->name('billing.receipt.pdf');
     Route::post('billing/{tagihan}/cash', [\App\Http\Controllers\TagihanController::class, 'payCash'])->name('billing.pay-cash');
     Route::post('billing/{tagihan}/send-receipt-wa', [\App\Http\Controllers\TagihanController::class, 'sendReceiptWa'])->name('billing.send-receipt-wa');
+    
+    // Upgrade Paket WiFi
+    Route::get('upgrade-paket', [\App\Http\Controllers\UpgradePaketController::class, 'index'])->name('upgrade-paket.index');
+    Route::post('upgrade-paket/request', [\App\Http\Controllers\UpgradePaketController::class, 'requestUpgrade'])->name('upgrade-paket.request');
+    Route::post('upgrade-paket/admin-upgrade', [\App\Http\Controllers\UpgradePaketController::class, 'adminUpgrade'])->name('upgrade-paket.admin-upgrade');
+    Route::post('upgrade-paket/{upgrade}/cancel', [\App\Http\Controllers\UpgradePaketController::class, 'cancelUpgrade'])->name('upgrade-paket.cancel');
+
+    // Tutorial Modem & WiFi
+    Route::get('tutorial', [\App\Http\Controllers\TutorialController::class, 'index'])->name('tutorial.index');
+    Route::get('tutorial/{tutorial:slug}', [\App\Http\Controllers\TutorialController::class, 'show'])->name('tutorial.show');
+    
+    // Admin Tutorial Management
+    Route::get('admin/tutorial', [\App\Http\Controllers\TutorialController::class, 'adminIndex'])->name('tutorial.admin.index');
+    Route::get('admin/tutorial/create', [\App\Http\Controllers\TutorialController::class, 'create'])->name('tutorial.create');
+    Route::post('admin/tutorial', [\App\Http\Controllers\TutorialController::class, 'store'])->name('tutorial.store');
+    Route::get('admin/tutorial/{tutorial}/edit', [\App\Http\Controllers\TutorialController::class, 'edit'])->name('tutorial.edit');
+    // We can use PUT/PATCH or POST
+    Route::put('admin/tutorial/{tutorial}', [\App\Http\Controllers\TutorialController::class, 'update'])->name('tutorial.update');
+    Route::delete('admin/tutorial/{tutorial}', [\App\Http\Controllers\TutorialController::class, 'destroy'])->name('tutorial.destroy');
+    Route::post('admin/tutorial/{tutorial}/toggle-publish', [\App\Http\Controllers\TutorialController::class, 'togglePublish'])->name('tutorial.toggle-publish');
+    Route::post('admin/tutorial/upload-image', [\App\Http\Controllers\TutorialController::class, 'uploadImage'])->name('tutorial.upload-image');
     
     // Settings
     Route::get('settings/payment', [\App\Http\Controllers\TagihanController::class, 'settings'])->name('settings.payment');

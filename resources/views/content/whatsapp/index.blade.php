@@ -266,28 +266,51 @@
             if(method === 'qr') {
                 axios.post("{{ route('whatsapp.session.start') }}", { id: id })
                     .then(res => {
+                        if (res.data.error) {
+                            Swal.fire({ icon: 'error', title: 'Gagal', text: res.data.error });
+                            btnGenerate.disabled = false;
+                            btnGenerate.innerHTML = 'Hubungkan';
+                            return;
+                        }
                         startPolling(id);
-                        btnGenerate.innerHTML = '<i class="bx bx-sync bx-spin me-1"></i> Menunggu Scan...';
+                        resultArea.style.display = 'block';
+                        document.getElementById('qrContainer').style.display = 'block';
+                        btnGenerate.innerHTML = '<i class="bx bx-sync bx-spin me-1"></i> Menunggu Scan QR...';
                     })
                     .catch(err => {
-                        alert('Gagal memulai sesi: ' + (err.response?.data?.error || 'Server Error'));
+                        const msg = err.response?.data?.error || err.message || 'Gagal konek ke server bot. Pastikan bot sudah dijalankan.';
+                        Swal.fire({ icon: 'error', title: 'Gagal Memulai Sesi', text: msg });
                         btnGenerate.disabled = false;
                         btnGenerate.innerHTML = 'Hubungkan';
                     });
             } else {
+                if (!phone) {
+                    Swal.fire({ icon: 'warning', title: 'Nomor Kosong', text: 'Masukkan nomor WhatsApp format 628xxx terlebih dahulu.' });
+                    btnGenerate.disabled = false;
+                    btnGenerate.innerHTML = 'Hubungkan';
+                    return;
+                }
                 axios.post("{{ route('whatsapp.session.pairing') }}", { id: id, phone: phone })
                     .then(res => {
-                        if(res.data.pairingCode) {
+                        if (res.data.pairingCode) {
                             resultArea.style.display = 'block';
                             document.getElementById('pairingContainer').style.display = 'block';
+                            document.getElementById('qrContainer').style.display = 'none';
                             document.getElementById('pairingDisplay').innerText = res.data.pairingCode;
                             btnGenerate.style.display = 'none';
                             startPolling(id);
                         } else {
-                            alert('Gagal: ' + (res.data.error || 'Unknown Error'));
+                            const errMsg = res.data.error || 'Tidak ada pairing code diterima dari server.';
+                            Swal.fire({ icon: 'error', title: 'Gagal Pairing', text: errMsg });
                             btnGenerate.disabled = false;
                             btnGenerate.innerHTML = 'Hubungkan';
                         }
+                    })
+                    .catch(err => {
+                        const msg = err.response?.data?.error || err.message || 'Gagal konek ke server bot. Pastikan bot sudah dijalankan.';
+                        Swal.fire({ icon: 'error', title: 'Gagal Pairing', text: msg });
+                        btnGenerate.disabled = false;
+                        btnGenerate.innerHTML = 'Hubungkan';
                     });
             }
         });

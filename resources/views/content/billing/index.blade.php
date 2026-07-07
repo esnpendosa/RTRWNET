@@ -456,11 +456,29 @@
                             <br><small class="text-muted">{{ $t->paid_at }} via {{ $t->metode_pembayaran ?? 'System' }}</small>
                             @if($t->bukti_bayar && file_exists(storage_path('app/public/' . $t->bukti_bayar)))
                                 <br><a href="{{ asset('storage/' . $t->bukti_bayar) }}" target="_blank" class="small text-info"><i class='bx bx-image-alt'></i> Lihat Bukti TF</a>
+                                @php
+                                    $canEditProof = auth()->user()->id_role == 1 || auth()->user()->id_role == 2 || 
+                                                    ($t->pelanggan && $t->pelanggan->id_user == auth()->id());
+                                @endphp
+                                @if($canEditProof)
+                                    <a href="{{ route('billing.edit-bukti-bayar', $t->id_tagihan) }}" class="small text-warning ms-2">
+                                        <i class='bx bx-edit'></i> Edit Bukti
+                                    </a>
+                                @endif
                             @endif
                         @elseif($t->status == 'pending' || ($t->status == 'unpaid' && $t->bukti_bayar))
                             <span class="badge bg-label-info">Menunggu Verifikasi</span>
                             @if($t->bukti_bayar && file_exists(storage_path('app/public/' . $t->bukti_bayar)))
                                 <br><a href="{{ asset('storage/' . $t->bukti_bayar) }}" target="_blank" class="small"><i class='bx bx-image'></i> Lihat Bukti</a>
+                                @php
+                                    $canEditProof = auth()->user()->id_role == 1 || auth()->user()->id_role == 2 || 
+                                                    ($t->pelanggan && $t->pelanggan->id_user == auth()->id());
+                                @endphp
+                                @if($canEditProof)
+                                    <a href="{{ route('billing.edit-bukti-bayar', $t->id_tagihan) }}" class="small text-warning ms-2">
+                                        <i class='bx bx-edit'></i> Edit Bukti
+                                    </a>
+                                @endif
                             @endif
                         @elseif($t->status == 'unpaid')
                             <span class="badge bg-label-warning">Belum Bayar</span>
@@ -542,6 +560,16 @@
                 @endforelse
             </tbody>
         </table>
+    </div>
+    
+    <!-- Pagination -->
+    <div class="mt-3 d-flex justify-content-between align-items-center">
+        <div class="text-muted small">
+            Menampilkan {{ $tagihan->firstItem() ?? 0 }} - {{ $tagihan->lastItem() ?? 0 }} dari {{ $tagihan->total() }} tagihan
+        </div>
+        <div>
+            {{ $tagihan->links() }}
+        </div>
     </div>
 </div>
 

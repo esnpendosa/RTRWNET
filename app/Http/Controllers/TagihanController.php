@@ -16,7 +16,11 @@ class TagihanController extends Controller
         $filterBulan = $request->query('filter_bulan');
         $filterTahun = $request->query('filter_tahun');
         $user = auth()->user();
-        $query = Tagihan::with('pelanggan');
+        
+        // OPTIMIZATION: Eager load relationships to prevent N+1 queries
+        $query = Tagihan::with(['pelanggan' => function($q) {
+            $q->select('id_pelanggan', 'kode_pelanggan', 'nama_pelanggan', 'id_user', 'no_wa', 'wa_active');
+        }]);
 
         if ($filterBulan) {
             $query->where('bulan', $filterBulan);
@@ -107,14 +111,25 @@ class TagihanController extends Controller
             });
         }
 
-        $tagihan = $query->get()->sortBy(function($t) {
-            $code = $t->pelanggan->kode_pelanggan ?? '';
-            $year = sprintf('%04d', $t->tahun);
-            $month = sprintf('%02d', $t->bulan);
-            return "{$code}_{$year}_{$month}";
-        }, SORT_NATURAL | SORT_FLAG_CASE)->values();
+        // OPTIMIZATION: Use pagination instead of get() + sort to reduce memory usage
+        // Order by database instead of collection sort for better performance
+        $query->orderByRaw("CONCAT(
+            COALESCE((SELECT kode_pelanggan FROM pelanggan WHERE pelanggan.id_pelanggan = tagihan.id_pelanggan), ''), 
+            '_', 
+            LPAD(tahun, 4, '0'), 
+            '_', 
+            LPAD(bulan, 2, '0')
+        )");
+        
+        // OPTIMIZATION: Use pagination to limit records loaded per page
+        $tagihan = $query->paginate(50)->appends($request->query());
 
-        $allPelanggan = Pelanggan::where('is_active', true)->get()->sortBy('kode_pelanggan', SORT_NATURAL | SORT_FLAG_CASE)->values();
+        // OPTIMIZATION: Only load active customers for modal, with minimal fields
+        $allPelanggan = Pelanggan::where('is_active', true)
+            ->select('id_pelanggan', 'kode_pelanggan', 'nama_pelanggan', 'harga_layanan')
+            ->orderBy('kode_pelanggan')
+            ->get();
+            
         return view('content.billing.index', compact('tagihan', 'allPelanggan'));
     }
 
@@ -480,6 +495,140 @@ class TagihanController extends Controller
         $tagihan->update($data);
 
         return back()->with('success', 'Bukti pembayaran berhasil diunggah. Menunggu konfirmasi admin.');
+    }
+
+    public function editBuktiBayar(Request $request, Tagihan $tagihan)
+    {
+        // Task 2.1: Permission checking (customer owns OR admin/manager)
+        $user = auth()->user();
+        $isAdmin = in_array($user->id_role, [1, 2]); // Admin or Manager
+        $isOwner = $tagihan->pelanggan && $tagihan->pelanggan->id_user == $user->id;
+
+        if (!$isAdmin && !$isOwner) {
+            abort(403, 'Anda tidak memiliki akses untuk mengedit bukti bayar ini');
+        }
+
+        // Task 2.2: File validation - Manual validation to avoid fileinfo dependency
+        if (!$request->hasFile('bukti_bayar')) {
+            return back()->withErrors(['bukti_bayar' => 'File bukti pembayaran harus dilampirkan.']);
+        }
+
+        $file = $request->file('bukti_bayar');
+        
+        // Validate extension
+        $extension = strtolower($file->getClientOriginalExtension());
+        $allowedExtensions = ['jpeg', 'png', 'jpg', 'gif', 'pdf'];
+        
+        if (!in_array($extension, $allowedExtensions)) {
+            return back()->withErrors(['bukti_bayar' => 'Bukti pembayaran harus berupa dokumen gambar (jpg, png, jpeg, gif) atau berkas PDF!']);
+        }
+        
+        // Validate file size (max 3MB)
+        if ($file->getSize() > 3 * 1024 * 1024) {
+            return back()->withErrors(['bukti_bayar' => 'Ukuran file bukti pembayaran maksimal 3MB!']);
+        }
+
+        // Validate metode_pembayaran if provided
+        if ($request->filled('metode_pembayaran') && strlen($request->metode_pembayaran) > 255) {
+            return back()->withErrors(['metode_pembayaran' => 'Metode pembayaran maksimal 255 karakter.']);
+        }
+
+        // Task 2.3: File deletion and upload logic
+        $oldFile = $tagihan->bukti_bayar;
+
+        // Delete old file if exists
+        if ($oldFile) {
+            $filePath = storage_path('app/public/' . $oldFile);
+            if (file_exists($filePath)) {
+                $deleted = @unlink($filePath);
+                if (!$deleted) {
+                    \Illuminate\Support\Facades\Log::warning('Failed to delete old payment proof: ' . $filePath);
+                }
+            }
+        }
+
+        // Upload new file with unique filename
+        $filename = time() . '_' . uniqid() . '.' . $extension;
+        $targetDir = storage_path('app/public/bukti_bayar');
+        
+        if (!file_exists($targetDir)) {
+            @mkdir($targetDir, 0755, true);
+            @chmod($targetDir, 0755);
+        }
+        
+        try {
+            $file->move($targetDir, $filename);
+            @chmod($targetDir . '/' . $filename, 0644);
+            $path = 'bukti_bayar/' . $filename;
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to upload payment proof: ' . $e->getMessage());
+            return back()->withErrors(['bukti_bayar' => 'Gagal mengunggah file. Silakan coba lagi.'])->withInput();
+        }
+
+        // Task 2.4: Status update logic based on user role
+        $data = [
+            'bukti_bayar' => $path,
+        ];
+
+        // Update metode_pembayaran if provided
+        if ($request->filled('metode_pembayaran')) {
+            $data['metode_pembayaran'] = $request->metode_pembayaran;
+        }
+
+        // Status update based on role
+        if (!$isAdmin) {
+            // Customer edits: maintain status as 'unpaid' for admin verification
+            $data['status'] = 'unpaid';
+        } else {
+            // Admin edits: can optionally verify and set to 'paid'
+            if ($request->input('verify_payment')) {
+                $data['status'] = 'paid';
+                $data['paid_at'] = now();
+            } else if ($request->has('status')) {
+                // Allow admin to explicitly set status
+                $data['status'] = $request->status;
+                if ($request->status === 'paid' && !$tagihan->paid_at) {
+                    $data['paid_at'] = now();
+                    }
+                }
+                // If no explicit status change, preserve existing status
+            }
+
+            // Task 2.5: Update database and log activity
+            $tagihan->update($data);
+
+        // Task 2.5: Update database and log activity
+        $tagihan->update($data);
+
+        // Log activity
+        try {
+            $actionDescription = $oldFile ? 'mengganti ' . basename($oldFile) : 'menambahkan bukti baru';
+            \App\Helpers\ActivityLogger::log(
+                'Mengedit bukti bayar tagihan #' . $tagihan->id_tagihan . 
+                ' (' . ($tagihan->pelanggan ? $tagihan->pelanggan->nama_pelanggan : 'Umum') . ') ' .
+                $actionDescription,
+                'tagihan'
+            );
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to log activity for payment proof edit: ' . $e->getMessage());
+            // Continue - logging failure should not block the operation
+        }
+
+        return back()->with('success', 'Bukti pembayaran berhasil diperbarui.');
+    }
+
+    public function showEditBuktiBayar(Tagihan $tagihan)
+    {
+        // Permission checking (customer owns OR admin/manager)
+        $user = auth()->user();
+        $isAdmin = in_array($user->id_role, [1, 2]); // Admin or Manager
+        $isOwner = $tagihan->pelanggan && $tagihan->pelanggan->id_user == $user->id;
+
+        if (!$isAdmin && !$isOwner) {
+            abort(403, 'Anda tidak memiliki akses untuk mengedit bukti bayar ini');
+        }
+
+        return view('content.billing.edit-bukti-bayar', compact('tagihan'));
     }
 
     public function verifikasi(Request $request, Tagihan $tagihan)

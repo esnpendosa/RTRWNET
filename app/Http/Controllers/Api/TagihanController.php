@@ -205,4 +205,142 @@ class TagihanController extends Controller
 
         return $this->successResponse($stats, 'Berhasil mengambil statistik tagihan');
     }
+
+    /**
+     * Edit payment proof (bukti bayar) for a billing record.
+     */
+    public function editBuktiBayar(Request $request, $id): JsonResponse
+    {
+        // Find Tagihan by ID
+        $tagihan = Tagihan::with('pelanggan')->find($id);
+
+        if (!$tagihan) {
+            return $this->errorResponse('Tagihan tidak ditemukan', 404);
+        }
+
+        // Task 4.1: Permission checking (customer owns OR admin/manager)
+        $user = auth()->user();
+        $isAdmin = in_array($user->id_role, [1, 2]); // Admin or Manager
+        $isOwner = $tagihan->pelanggan && $tagihan->pelanggan->id_user == $user->id;
+
+        if (!$isAdmin && !$isOwner) {
+            return $this->errorResponse('Anda tidak memiliki akses untuk mengedit bukti bayar ini', 403);
+        }
+
+        // Task 4.2: File validation - Manual validation to avoid fileinfo dependency
+        if (!$request->hasFile('bukti_bayar')) {
+            return $this->errorResponse('Validasi gagal', 422, [
+                'bukti_bayar' => ['File bukti pembayaran harus dilampirkan.']
+            ]);
+        }
+
+        $file = $request->file('bukti_bayar');
+        $extension = strtolower($file->getClientOriginalExtension());
+        $allowedExtensions = ['jpeg', 'png', 'jpg', 'gif', 'pdf'];
+        
+        // Additional validation
+        if (!in_array($extension, $allowedExtensions)) {
+            return $this->errorResponse('Validasi gagal', 422, [
+                'bukti_bayar' => ['Bukti pembayaran harus berupa dokumen gambar (jpg, png, jpeg, gif) atau berkas PDF!']
+            ]);
+        }
+        if ($file->getSize() > 3 * 1024 * 1024) {
+            return $this->errorResponse('Validasi gagal', 422, [
+                'bukti_bayar' => ['Ukuran file bukti pembayaran maksimal 3MB!']
+            ]);
+        }
+
+        // Validate metode_pembayaran if provided
+        if ($request->filled('metode_pembayaran') && strlen($request->metode_pembayaran) > 255) {
+            return $this->errorResponse('Validasi gagal', 422, [
+                'metode_pembayaran' => ['Metode pembayaran maksimal 255 karakter.']
+            ]);
+        }
+
+        // File deletion and upload logic
+        $oldFile = $tagihan->bukti_bayar;
+        
+        // Delete old file if exists
+        if ($oldFile) {
+            $filePath = storage_path('app/public/' . $oldFile);
+            if (file_exists($filePath)) {
+                $deleted = @unlink($filePath);
+                if (!$deleted) {
+                    Log::warning('API: Failed to delete old payment proof: ' . $filePath);
+                }
+            }
+        }
+
+        // Upload new file with unique filename
+        $filename = time() . '_' . uniqid() . '.' . $extension;
+        $targetDir = storage_path('app/public/bukti_bayar');
+        
+        if (!file_exists($targetDir)) {
+            @mkdir($targetDir, 0755, true);
+            @chmod($targetDir, 0755);
+        }
+        
+        try {
+            $file->move($targetDir, $filename);
+            @chmod($targetDir . '/' . $filename, 0644);
+            $path = 'bukti_bayar/' . $filename;
+        } catch (\Exception $e) {
+            Log::error('API: Failed to upload payment proof: ' . $e->getMessage());
+            return $this->errorResponse('Gagal mengunggah file. Silakan coba lagi.', 500);
+        }
+
+        // Status update logic based on user role
+        $data = [
+            'bukti_bayar' => $path,
+        ];
+
+        // Update metode_pembayaran if provided
+        if ($request->filled('metode_pembayaran')) {
+            $data['metode_pembayaran'] = $request->metode_pembayaran;
+        }
+
+        // Status update based on role
+        if (!$isAdmin) {
+            // Customer edits: maintain status as 'unpaid' for admin verification
+            $data['status'] = 'unpaid';
+        } else {
+            // Admin edits: can optionally verify and set to 'paid'
+            if ($request->input('verify_payment')) {
+                $data['status'] = 'paid';
+                $data['paid_at'] = now();
+            } else if ($request->has('status')) {
+                // Allow admin to explicitly set status
+                $data['status'] = $request->status;
+                if ($request->status === 'paid' && !$tagihan->paid_at) {
+                    $data['paid_at'] = now();
+                }
+            }
+            // If no explicit status change, preserve existing status
+        }
+
+        // Update database and log activity
+        $tagihan->update($data);
+
+        // Log activity
+        try {
+            $actionDescription = $oldFile ? 'mengganti ' . basename($oldFile) : 'menambahkan bukti baru';
+            \App\Helpers\ActivityLogger::log(
+                'Mengedit bukti bayar tagihan #' . $tagihan->id_tagihan . 
+                ' (' . ($tagihan->pelanggan ? $tagihan->pelanggan->nama_pelanggan : 'Umum') . ') ' .
+                $actionDescription . ' via API',
+                'tagihan'
+            );
+        } catch (\Exception $e) {
+            Log::error('API: Failed to log activity for payment proof edit: ' . $e->getMessage());
+            // Continue - logging failure should not block the operation
+        }
+
+        // Return success response with updated billing record data
+        return $this->successResponse([
+            'id_tagihan' => $tagihan->id_tagihan,
+            'bukti_bayar' => $tagihan->bukti_bayar,
+            'metode_pembayaran' => $tagihan->metode_pembayaran,
+            'status' => $tagihan->status,
+        ], 'Bukti pembayaran berhasil diperbarui');
+    }
 }

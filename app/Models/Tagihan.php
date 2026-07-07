@@ -45,6 +45,73 @@ class Tagihan extends Model
                 }
             }
         });
+
+        static::updated(function ($tagihan) {
+            if ($tagihan->status === 'paid') {
+                $upgrade = \App\Models\PackageUpgrade::where('id_tagihan', $tagihan->id_tagihan)
+                    ->where('status', 'pending')
+                    ->first();
+                if ($upgrade) {
+                    $upgrade->update(['status' => 'completed']);
+                    
+                    $pelanggan = $tagihan->pelanggan;
+                    if ($pelanggan) {
+                        $pelanggan->update([
+                            'paket' => $upgrade->paket_baru,
+                            'harga_layanan' => $upgrade->harga_baru,
+                            'is_active' => true,
+                        ]);
+
+                        if ($pelanggan->id_router) {
+                            try {
+                                $mikrotikService = app(\App\Services\MikrotikService::class);
+                                $username = $pelanggan->mikrotik_username ?: $pelanggan->kode_pelanggan;
+                                $mikrotikService->setSecretStatus(
+                                    $pelanggan->router,
+                                    $username,
+                                    $pelanggan->mikrotik_type,
+                                    false,
+                                    $pelanggan->ip_address,
+                                    $pelanggan->paket
+                                );
+                            } catch (\Exception $e) {
+                                \Illuminate\Support\Facades\Log::error("Failed to sync upgraded package to Mikrotik: " . $e->getMessage());
+                            }
+                        }
+
+                        // Send WA notifications
+                        try {
+                            $waClient = new \App\Services\WhatsappClient();
+                            if ($pelanggan->no_wa && $pelanggan->wa_active && \App\Models\Setting::get('wa_billing_notification_enabled', '1') == '1') {
+                                $custMsg = "🎉 *UPGRADE PAKET WIFI BERHASIL*\n\n";
+                                $custMsg .= "Halo *" . $pelanggan->nama_pelanggan . "* (" . $pelanggan->kode_pelanggan . "),\n";
+                                $custMsg .= "Pembayaran upgrade paket Anda telah diverifikasi.\n";
+                                $custMsg .= "Paket Anda telah berhasil di-upgrade:\n";
+                                $custMsg .= "• Paket Baru: *" . $upgrade->paket_baru . "*\n";
+                                $custMsg .= "• Biaya Layanan: *Rp " . number_format($upgrade->harga_baru, 0, ',', '.') . "/bulan*\n\n";
+                                $custMsg .= "Layanan internet Anda telah otomatis disesuaikan. Terima kasih nggih!";
+                                $waClient->sendMessage($pelanggan->no_wa, ['text' => $custMsg], true);
+                            }
+
+                            // To admin
+                            $adminNum = \App\Models\Setting::get('wa_admin_number'); 
+                            if (empty($adminNum)) {
+                                $adminNum = env('WHATSAPP_ADMIN_NUMBER');
+                            }
+                            if ($adminNum) {
+                                $adminMsg = "🔔 *LAPORAN UPGRADE PAKET WIFI*\n\n";
+                                $adminMsg .= "Pelanggan: *" . $pelanggan->nama_pelanggan . "* (" . $pelanggan->kode_pelanggan . ")\n";
+                                $adminMsg .= "Upgrade: *" . $upgrade->paket_lama . "* ➔ *" . $upgrade->paket_baru . "*\n";
+                                $adminMsg .= "Status: *BERHASIL & SINKRON MIKROTIK*\n";
+                                $waClient->sendMessage($adminNum, ['text' => $adminMsg], true);
+                            }
+                        } catch (\Exception $e) {
+                            \Illuminate\Support\Facades\Log::error("Failed to send WA notification for package upgrade: " . $e->getMessage());
+                        }
+                    }
+                }
+            }
+        });
     }
 
     public function pelanggan()

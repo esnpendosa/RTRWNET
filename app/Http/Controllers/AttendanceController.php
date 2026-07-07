@@ -167,15 +167,13 @@ class AttendanceController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
+        if ($user->id_role == 4) {
+            abort(403, 'Akses ditolak. Pelanggan tidak dapat mengakses halaman absensi pegawai.');
+        }
         
         $targetUserId = $request->get('user_id');
         if (!$targetUserId) {
-            $targetUserId = ($user->id_role != 4) ? 'all' : $user->id;
-        }
-
-        // Security check
-        if ($targetUserId !== 'all' && $targetUserId != $user->id && $user->id_role == 4) {
-            abort(403);
+            $targetUserId = 'all';
         }
 
         $month = $request->filled('month') ? (int) $request->month : (int) date('n');
@@ -348,13 +346,12 @@ class AttendanceController extends Controller
     public function today()
     {
         $user = Auth::user();
-        $today = Carbon::today()->toDateString();
-
-        if ($user->id_role != 4) {
-            $absensis = Absensi::where('tgl', $today)->with('user')->orderBy('created_at', 'desc')->get();
-        } else {
-            $absensis = Absensi::where('user_id', $user->id)->where('tgl', $today)->get();
+        if ($user->id_role == 4) {
+            abort(403, 'Akses ditolak. Pelanggan tidak dapat mengakses halaman absensi pegawai.');
         }
+
+        $today = Carbon::today()->toDateString();
+        $absensis = Absensi::where('tgl', $today)->with('user')->orderBy('created_at', 'desc')->get();
 
         $devicesJson = Setting::get('fingerspot_devices');
         $devices = $devicesJson ? json_decode($devicesJson, true) : [];

@@ -46,6 +46,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         Route::get('jatuh-tempo-hari-ini', [TagihanController::class, 'jatuhTempoHariIni']);
         Route::get('statistik', [TagihanController::class, 'statistik']);
         Route::patch('{id}/tandai-lunas', [TagihanController::class, 'tandaiLunas']);
+        Route::post('{id}/edit-bukti-bayar', [TagihanController::class, 'editBuktiBayar']);
     });
 
     // Dashboard summary

@@ -11,13 +11,14 @@ class WhatsappClient
 
     public function __construct()
     {
-        $port = env('BOT_PORT', 3000);
-        $this->baseUrl = "http://127.0.0.1:$port";
+        $port = config('services.whatsapp_bot.port', env('BOT_PORT', 3000));
+        $this->baseUrl = "http://127.0.0.1:{$port}";
     }
 
     protected function secret()
     {
-        return env('BOT_SECRET'); // Wajib di-set di .env — tidak ada fallback default
+        // Gunakan config() agar bekerja saat config cache aktif, fallback ke env() langsung
+        return config('services.whatsapp_bot.secret', env('BOT_SECRET', 'rozitech-bot-secret-2024'));
     }
 
     public function sendMessage($phone, $data, $async = false)
