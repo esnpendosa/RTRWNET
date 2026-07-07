@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Helpers\NotificationHelper;
 
 class Tagihan extends Model
 {
@@ -108,6 +109,20 @@ class Tagihan extends Model
                         } catch (\Exception $e) {
                             \Illuminate\Support\Facades\Log::error("Failed to send WA notification for package upgrade: " . $e->getMessage());
                         }
+
+                        // ── In-App Notification ──────────────────────────────
+                        NotificationHelper::sendToRole('Admin', 'upgrade_paket',
+                            'Upgrade Paket Selesai',
+                            "{$pelanggan->nama_pelanggan} ({$pelanggan->kode_pelanggan}) upgrade " .
+                            "{$upgrade->paket_lama} → {$upgrade->paket_baru} sudah selesai.",
+                            ['icon' => 'bx-trending-up', 'color' => 'success', 'action_url' => route('upgrade-paket.index')]
+                        );
+                        NotificationHelper::sendToRole('Manajer', 'upgrade_paket',
+                            'Upgrade Paket Selesai',
+                            "{$pelanggan->nama_pelanggan} ({$pelanggan->kode_pelanggan}) upgrade " .
+                            "{$upgrade->paket_lama} → {$upgrade->paket_baru} sudah selesai.",
+                            ['icon' => 'bx-trending-up', 'color' => 'success', 'action_url' => route('upgrade-paket.index')]
+                        );
                     }
                 }
             }

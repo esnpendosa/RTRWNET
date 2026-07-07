@@ -1,11 +1,11 @@
 @extends('layouts/contentNavbarLayout')
 
-@section('title', 'Tutorial Modem & WiFi')
+@section('title', 'Tutorial')
 
 @section('content')
 <div class="d-flex justify-content-between align-items-center py-3 mb-4">
     <div>
-        <h4 class="fw-bold mb-1"><i class="bx bx-book-open text-primary me-2"></i>Tutorial Modem & WiFi</h4>
+        <h4 class="fw-bold mb-1"><i class="bx bx-book-open text-primary me-2"></i>Tutorial</h4>
         <p class="text-muted mb-0 small">Panduan lengkap penggunaan perangkat internet Anda</p>
     </div>
     @if($isAdmin)

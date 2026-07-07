@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\TiketGangguan;
 use App\Models\Pelanggan;
 use App\Models\Teknisi;
+use App\Models\User;
+use App\Helpers\NotificationHelper;
 use Illuminate\Http\Request;
 
 class TiketController extends Controller
@@ -116,7 +118,7 @@ class TiketController extends Controller
             'keluhan' => 'required',
         ]);
 
-        TiketGangguan::create([
+        $tiket = TiketGangguan::create([
             'kode_tiket' => 'TKT-' . date('YmdHis'),
             'id_pelanggan' => $id_pelanggan,
             'prioritas' => $prioritas,
@@ -124,6 +126,27 @@ class TiketController extends Controller
             'id_teknisi' => $id_teknisi,
             'status' => 'Open'
         ]);
+
+        // ── Kirim notifikasi ke semua Admin & Manajer ──────────────────────────
+        $namaPelanggan = optional(Pelanggan::find($id_pelanggan))->nama_pelanggan ?? 'Pelanggan';
+        NotificationHelper::sendToRole('Admin', 'tiket_baru', 'Tiket Gangguan Baru',
+            "Tiket #{$tiket->kode_tiket} dari {$namaPelanggan}: {$request->keluhan}",
+            ['icon' => 'bx-error-circle', 'color' => 'danger', 'action_url' => route('tiket.index')]
+        );
+        NotificationHelper::sendToRole('Manajer', 'tiket_baru', 'Tiket Gangguan Baru',
+            "Tiket #{$tiket->kode_tiket} dari {$namaPelanggan}: {$request->keluhan}",
+            ['icon' => 'bx-error-circle', 'color' => 'danger', 'action_url' => route('tiket.index')]
+        );
+        // ── Notifikasi ke Teknisi yang di-assign (jika ada) ───────────────────
+        if ($id_teknisi) {
+            $teknisiUser = Teknisi::find($id_teknisi);
+            if ($teknisiUser && $teknisiUser->id_user) {
+                NotificationHelper::send($teknisiUser->id_user, 'tiket_baru', 'Tiket Baru Ditugaskan',
+                    "Anda mendapat tiket #{$tiket->kode_tiket} dari {$namaPelanggan}.",
+                    ['icon' => 'bx-error-circle', 'color' => 'warning', 'action_url' => route('tiket.index')]
+                );
+            }
+        }
 
         return redirect()->route('tiket.index')->with('success', 'Tiket berhasil dibuat');
     }
@@ -258,26 +281,82 @@ class TiketController extends Controller
         }
 
         $chat = \App\Models\TiketChat::create([
-            'id_tiket' => $tiket->id_tiket,
-            'id_user' => auth()->id(),
-            'message' => $request->message ?? '',
+            'id_tiket'   => $tiket->id_tiket,
+            'id_user'    => auth()->id(),
+            'message'    => $request->message ?? '',
             'image_path' => $imagePath
         ]);
 
         $chat->load('user.role');
 
+        // ── Kirim notifikasi in-app ke pihak lain di tiket ini ────────────────
+        try {
+            $senderName = $chat->user->name;
+            $preview    = $request->message
+                ? (strlen($request->message) > 50 ? substr($request->message, 0, 50) . '…' : $request->message)
+                : '📷 Gambar';
+            $notifBody  = "{$senderName}: {$preview}";
+            $notifOpts  = [
+                'icon'       => 'bx-chat',
+                'color'      => 'info',
+                'action_url' => route('tiket.index'),
+            ];
+
+            if ($ctx['isPelanggan']) {
+                // Pelanggan kirim pesan → Admin & Manajer dikasih tahu
+                NotificationHelper::sendToRole('Admin', 'chat_baru',
+                    "💬 Pesan Tiket #{$tiket->kode_tiket}", $notifBody, $notifOpts);
+                NotificationHelper::sendToRole('Manajer', 'chat_baru',
+                    "💬 Pesan Tiket #{$tiket->kode_tiket}", $notifBody, $notifOpts);
+                // Teknisi yang di-assign
+                if ($tiket->id_teknisi) {
+                    $tek = Teknisi::find($tiket->id_teknisi);
+                    if ($tek?->id_user) {
+                        NotificationHelper::send($tek->id_user, 'chat_baru',
+                            "💬 Pesan Tiket #{$tiket->kode_tiket}", $notifBody, $notifOpts);
+                    }
+                }
+            } elseif ($ctx['isTeknisi']) {
+                // Teknisi kirim pesan → Admin tahu
+                NotificationHelper::sendToRole('Admin', 'chat_baru',
+                    "💬 Pesan Tiket #{$tiket->kode_tiket}", $notifBody, $notifOpts);
+                // Pelanggan tahu
+                if ($tiket->pelanggan?->id_user) {
+                    NotificationHelper::send($tiket->pelanggan->id_user, 'chat_baru',
+                        "💬 Pesan Tiket #{$tiket->kode_tiket}", $notifBody, $notifOpts);
+                }
+            } else {
+                // Admin/Manajer kirim → Teknisi & Pelanggan tahu
+                if ($tiket->id_teknisi) {
+                    $tek = Teknisi::find($tiket->id_teknisi);
+                    if ($tek?->id_user) {
+                        NotificationHelper::send($tek->id_user, 'chat_baru',
+                            "💬 Pesan Tiket #{$tiket->kode_tiket}", $notifBody, $notifOpts);
+                    }
+                }
+                if ($tiket->pelanggan?->id_user) {
+                    NotificationHelper::send($tiket->pelanggan->id_user, 'chat_baru',
+                        "💬 Pesan Tiket #{$tiket->kode_tiket}", $notifBody, $notifOpts);
+                }
+            }
+        } catch (\Exception $e) {
+            // Jangan sampai notif gagal merusak pengiriman pesan
+            \Illuminate\Support\Facades\Log::warning('Chat notification failed: ' . $e->getMessage());
+        }
+
         return response()->json([
             'status' => 'success',
-            'chat' => [
-                'id' => $chat->id,
-                'user_id' => $chat->id_user,
+            'chat'   => [
+                'id'        => $chat->id,
+                'user_id'   => $chat->id_user,
                 'user_name' => $chat->user->name,
-                'role' => $chat->user->role ? $chat->user->role->name : 'Staff',
-                'message' => $chat->message,
+                'role'      => $chat->user->role ? $chat->user->role->name : 'Staff',
+                'message'   => $chat->message,
                 'image_url' => $chat->image_path ? asset('storage/' . $chat->image_path) : null,
-                'time' => $chat->created_at->format('H:i'),
-                'is_me' => true
+                'time'      => $chat->created_at->format('H:i'),
+                'is_me'     => true
             ]
         ]);
     }
+
 }

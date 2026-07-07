@@ -133,9 +133,15 @@
     },
     {
       "url": "/tutorial",
-      "name": "Tutorial Modem",
+      "name": "Tutorial",
       "icon": "menu-icon icon-base bx bx-book-open",
       "slug": "tutorial"
+    },
+    {
+      "url": "/modem",
+      "name": "Modem",
+      "icon": "menu-icon icon-base bx bx-chip",
+      "slug": "modem"
     },
     {
       "url": "/keuangan",

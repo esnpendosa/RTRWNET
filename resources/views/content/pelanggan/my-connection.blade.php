@@ -217,14 +217,7 @@
                     <span class="text-muted">Profil Layanan Wifi</span>
                     <span class="fw-bold text-primary">{{ $pelanggan->paket ?: 'Umum' }}</span>
                 </div>
-                <div class="mb-3 d-flex justify-content-between">
-                    <span class="text-muted">Tipe Layanan</span>
-                    <span class="fw-bold text-uppercase">{{ $pelanggan->mikrotik_type }}</span>
-                </div>
-                <div class="mb-3 d-flex justify-content-between">
-                    <span class="text-muted">Alamat IP</span>
-                    <span class="fw-bold">{{ $mikrotikData['active']['address'] ?? $pelanggan->ip_address ?? 'Offline' }}</span>
-                </div>
+
                 <div class="mb-3 d-flex justify-content-between">
                     <span class="text-muted">Lama Aktif (Uptime)</span>
                     <span class="fw-bold text-success">

@@ -14,6 +14,7 @@ use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\ScanController;
 use App\Http\Controllers\OdcOdpController;
 use App\Http\Controllers\authentications\LoginBasic;
+use App\Http\Controllers\NotificationController;
 
 // Fallback route to serve storage files directly without depending on symlink permissions
 Route::get('storage/{folder}/{filename}', function ($folder, $filename) {
@@ -217,6 +218,20 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('admin/tutorial/{tutorial}', [\App\Http\Controllers\TutorialController::class, 'destroy'])->name('tutorial.destroy');
     Route::post('admin/tutorial/{tutorial}/toggle-publish', [\App\Http\Controllers\TutorialController::class, 'togglePublish'])->name('tutorial.toggle-publish');
     Route::post('admin/tutorial/upload-image', [\App\Http\Controllers\TutorialController::class, 'uploadImage'])->name('tutorial.upload-image');
+
+    // Katalog Modem
+    Route::get('modem', [\App\Http\Controllers\ModemController::class, 'index'])->name('modem.index');
+    Route::get('modem/{modem}', [\App\Http\Controllers\ModemController::class, 'show'])->name('modem.show');
+
+    // Admin Modem Management
+    Route::middleware('can:pelanggan_manage')->group(function() {
+        Route::get('admin/modem', [\App\Http\Controllers\ModemController::class, 'adminIndex'])->name('modem.admin.index');
+        Route::get('admin/modem/create', [\App\Http\Controllers\ModemController::class, 'create'])->name('modem.create');
+        Route::post('admin/modem', [\App\Http\Controllers\ModemController::class, 'store'])->name('modem.store');
+        Route::get('admin/modem/{modem}/edit', [\App\Http\Controllers\ModemController::class, 'edit'])->name('modem.edit');
+        Route::put('admin/modem/{modem}', [\App\Http\Controllers\ModemController::class, 'update'])->name('modem.update');
+        Route::delete('admin/modem/{modem}', [\App\Http\Controllers\ModemController::class, 'destroy'])->name('modem.destroy');
+    });
     
     // Settings
     Route::get('settings/payment', [\App\Http\Controllers\TagihanController::class, 'settings'])->name('settings.payment');
@@ -258,6 +273,22 @@ Route::middleware(['auth'])->group(function () {
     Route::post('bot/responses', [\App\Http\Controllers\BotResponseController::class, 'store'])->name('bot.store');
     Route::put('bot/responses/{bot}', [\App\Http\Controllers\BotResponseController::class, 'update'])->name('bot.update');
     Route::delete('bot/responses/{bot}', [\App\Http\Controllers\BotResponseController::class, 'destroy'])->name('bot.destroy');
+
+    // =========================================================
+    // Notifikasi In-App (+ SSE Real-time Stream)
+    // =========================================================
+    Route::get('notifications/stream', [NotificationController::class, 'stream'])->name('notifications.stream');
+    Route::get('notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::get('notifications/count', [NotificationController::class, 'count'])->name('notifications.count');
+    Route::post('notifications/read-all', [NotificationController::class, 'readAll'])->name('notifications.read-all');
+    Route::post('notifications/{notification}/read', [NotificationController::class, 'read'])->name('notifications.read');
+
+    // =========================================================
+    // Chat Inbox (Pesan Tiket Gangguan)
+    // =========================================================
+    Route::get('chat-inbox', [\App\Http\Controllers\ChatInboxController::class, 'index'])->name('chat-inbox.index');
+    Route::post('chat-inbox/read-all', [\App\Http\Controllers\ChatInboxController::class, 'readAll'])->name('chat-inbox.read-all');
+    Route::post('chat-inbox/read-tiket/{id_tiket}', [\App\Http\Controllers\ChatInboxController::class, 'readTiket'])->name('chat-inbox.read-tiket');
 
     // System Logs
     Route::get('system/logs', [\App\Http\Controllers\LogController::class, 'index'])->name('logs.index');
