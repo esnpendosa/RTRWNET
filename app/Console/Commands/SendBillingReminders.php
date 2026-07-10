@@ -53,13 +53,17 @@ class SendBillingReminders extends Command
         $currentYear = now()->year;
 
         // Get active customers with unpaid bills for the current month
+        // Exclude 'pending' status (customer uploaded proof, awaiting admin verification)
+        // Exclude tagihan with bukti_bayar (customer already uploaded proof but status not yet changed)
         $unpaidPelanggan = Pelanggan::where('is_active', true)
             ->whereHas('tagihan', function ($query) use ($currentMonth, $currentYear) {
                 $query->where('status', 'unpaid')
+                      ->whereNull('bukti_bayar') // Skip jika sudah ada bukti bayar
                       ->where('bulan', $currentMonth)
                       ->where('tahun', $currentYear);
             })->with(['tagihan' => function($q) use ($currentMonth, $currentYear) {
                 $q->where('status', 'unpaid')
+                  ->whereNull('bukti_bayar')
                   ->where('bulan', $currentMonth)
                   ->where('tahun', $currentYear);
             }])->get();

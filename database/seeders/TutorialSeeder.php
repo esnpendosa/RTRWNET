@@ -143,6 +143,139 @@ class TutorialSeeder extends Seeder
                 'urutan' => 3,
                 'is_published' => true,
                 'created_by' => $adminId,
+            ],
+            [
+                'judul' => 'Cara Mengganti Nama WiFi & Password Modem HUAWEI EchoLife EG8141H5',
+                'slug' => 'cara-ganti-nama-wifi-password-huawei-echolife-eg8141h5',
+                'kategori' => 'Modem',
+                'ringkasan' => 'Panduan lengkap cara mengubah SSID (nama WiFi) dan kata sandi pada modem GPON ONT HUAWEI EchoLife EG8141H5 melalui IP 192.168.18.1.',
+                'konten' => '
+                    <p>Mengubah SSID (Nama WiFi) dan Password secara berkala pada modem <strong>HUAWEI EchoLife EG8141H5</strong> akan mengamankan jaringan Anda dari akses tidak sah. Berikut langkah-langkahnya:</p>
+                    
+                    <h3 class="fw-bold mt-4">Langkah 1: Hubungkan Perangkat ke Modem</h3>
+                    <p>Sambungkan HP atau laptop Anda ke WiFi modem Huawei Anda, atau hubungkan PC menggunakan kabel LAN ke salah satu port LAN modem.</p>
+                    
+                    <h3 class="fw-bold mt-4">Langkah 2: Buka IP Address di Browser</h3>
+                    <p>Buka Chrome, Safari, atau Firefox, lalu ketik IP Default: <strong class="text-primary">192.168.18.1</strong> dan tekan Enter.</p>
+                    
+                    <h3 class="fw-bold mt-4">Langkah 3: Login Web Admin</h3>
+                    <p>Masukkan salah satu kredensial administrator berikut:</p>
+                    <ul>
+                        <li>Username: <code>telecomadmin</code> | Password: <code>admintelecom</code> (Superadmin - Direkomendasikan)</li>
+                        <li>Username: <code>deviceadmin</code> | Password: <code>aNu5uH5</code></li>
+                    </ul>
+                    
+                    <h3 class="fw-bold mt-4">Langkah 4: Konfigurasi WLAN</h3>
+                    <ol>
+                        <li>Klik menu <strong>Advanced</strong> atau <strong>Advanced Configuration</strong> di menu atas.</li>
+                        <li>Pilih menu <strong>WLAN</strong> pada panel kiri, lalu pilih <strong>WLAN Basic Configuration</strong>.</li>
+                        <li>Pada bagian <strong>SSID Name</strong>, ganti nama WiFi lama dengan nama baru Anda.</li>
+                        <li>Centang opsi <strong>Enable SSID</strong>.</li>
+                        <li>Pada bagian <strong>WPA PreSharedKey</strong>, masukkan kata sandi baru Anda (minimal 8 karakter).</li>
+                        <li>Klik <strong>Apply</strong> di bagian bawah untuk menyimpan perubahan.</li>
+                    </ol>
+                    <blockquote class="bg-light p-3 border-start border-primary border-4 rounded mt-4">
+                        <strong>Catatan:</strong> Koneksi WiFi Anda akan terputus sesaat setelah mengklik Apply. Sambungkan kembali perangkat Anda menggunakan Nama WiFi dan password baru.
+                    </blockquote>
+                ',
+                'urutan' => 4,
+                'is_published' => true,
+                'created_by' => $adminId,
+            ],
+            [
+                'judul' => 'Cara Mengganti Nama WiFi & Password Modem HUAWEI F663NV3a (X PON ONU)',
+                'slug' => 'cara-ganti-nama-wifi-password-huawei-f663nv3a',
+                'kategori' => 'Modem',
+                'ringkasan' => 'Tutorial langkah demi langkah merubah nama WiFi dan password pada modem ONT HUAWEI F663NV3a menggunakan IP default 192.168.1.1.',
+                'konten' => '
+                    <p>Modem <strong>HUAWEI F663NV3a</strong> menggunakan IP default 192.168.1.1 untuk konfigurasinya. Simak panduan mengganti nama WiFi dan passwordnya di bawah ini:</p>
+                    
+                    <h3 class="fw-bold mt-4">Langkah 1: Hubungkan ke Jaringan</h3>
+                    <p>Pastikan Anda terhubung ke sinyal WiFi modem atau menggunakan kabel LAN.</p>
+                    
+                    <h3 class="fw-bold mt-4">Langkah 2: Akses Web GUI Modem</h3>
+                    <p>Buka browser Anda dan akses IP address: <strong class="text-primary">192.168.1.1</strong>.</p>
+                    
+                    <h3 class="fw-bold mt-4">Langkah 3: Login Admin</h3>
+                    <p>Masukkan username dan password admin bawaan:</p>
+                    <ul>
+                        <li>Username: <code>admin</code> | Password: <code>admin</code></li>
+                        <li>Username: <code>user</code> | Password: <code>user</code></li>
+                    </ul>
+                    
+                    <h3 class="fw-bold mt-4">Langkah 4: Ganti Nama WiFi & Password</h3>
+                    <ol>
+                        <li>Pilih menu <strong>Network</strong> pada menu utama bagian atas.</li>
+                        <li>Pilih sub-menu <strong>WLAN</strong> -> <strong>WLAN Security</strong> atau <strong>Multi-SSID Settings</strong>.</li>
+                        <li>Untuk mengubah nama WiFi: ubah teks pada kolom <strong>SSID Name</strong>.</li>
+                        <li>Untuk mengubah password: cari opsi <strong>WPA Passphrase</strong> atau <strong>WPA PreSharedKey</strong>, lalu masukkan password baru.</li>
+                        <li>Klik <strong>Submit</strong> atau <strong>Apply</strong> untuk menyimpan pengaturan Anda.</li>
+                    </ol>
+                ',
+                'urutan' => 5,
+                'is_published' => true,
+                'created_by' => $adminId,
+            ],
+            [
+                'judul' => 'Cara Mengganti Nama WiFi & Password Modem HUAWEI HG6145D2',
+                'slug' => 'cara-ganti-nama-wifi-password-huawei-hg6145d2',
+                'kategori' => 'Modem',
+                'ringkasan' => 'Langkah mudah mengubah SSID (nama WiFi) dan kata sandi WiFi untuk perangkat modem router HUAWEI HG6145D2.',
+                'konten' => '
+                    <p>Berikut adalah cara mengakses dan mengubah setelan WiFi pada modem GPON ONT <strong>HUAWEI HG6145D2</strong>:</p>
+                    
+                    <h3 class="fw-bold mt-4">Langkah-langkah Ganti WiFi:</h3>
+                    <ol>
+                        <li>Sambungkan HP/Laptop Anda ke WiFi modem.</li>
+                        <li>Buka web browser, buka halaman <strong class="text-primary">192.168.1.1</strong>.</li>
+                        <li>Login menggunakan akun admin standar (Username: <code>admin</code> | Password: <code>admin</code>) atau akun superadmin jika disediakan.</li>
+                        <li>Akses menu <strong>Network Settings</strong> -> <strong>WLAN Settings</strong>.</li>
+                        <li>Pada bagian <strong>SSID Settings</strong>, ubah nama WiFi pada kolom <strong>SSID Name</strong>.</li>
+                        <li>Pada bagian <strong>Security Settings</strong>, masukkan sandi baru Anda di kolom <strong>WPA PreSharedKey</strong>.</li>
+                        <li>Klik tombol <strong>Apply</strong> untuk menerapkan perubahan.</li>
+                    </ol>
+                ',
+                'urutan' => 6,
+                'is_published' => true,
+                'created_by' => $adminId,
+            ],
+            [
+                'judul' => 'Cara Mengganti Nama WiFi & Password Modem ZTE F670L Dual Band',
+                'slug' => 'cara-ganti-nama-wifi-password-zte-f670l',
+                'kategori' => 'Modem',
+                'ringkasan' => 'Panduan konfigurasi nama WiFi & password pada modem Dual Band ZTE F670L (2.4GHz & 5GHz) dengan IP 192.168.1.1.',
+                'konten' => '
+                    <p>Modem <strong>ZTE F670L</strong> mendukung teknologi Dual Band (memancarkan 2 sinyal WiFi sekaligus yaitu 2.4GHz untuk jangkauan luas dan 5GHz untuk kecepatan tinggi). Berikut cara mengubah nama WiFi dan password pada kedua frekuensi tersebut:</p>
+                    
+                    <h3 class="fw-bold mt-4">Langkah 1: Hubungkan Perangkat</h3>
+                    <p>Hubungkan HP atau laptop Anda ke jaringan WiFi ZTE F670L.</p>
+                    
+                    <h3 class="fw-bold mt-4">Langkah 2: Masuk ke IP Address Modem</h3>
+                    <p>Buka browser, lalu ketik URL <strong class="text-primary">192.168.1.1</strong> dan tekan Enter.</p>
+                    
+                    <h3 class="fw-bold mt-4">Langkah 3: Login User</h3>
+                    <p>Gunakan kredensial login berikut:</p>
+                    <ul>
+                        <li>Username: <code>user</code> | Password: <code>user</code></li>
+                        <li>Username: <code>admin</code> | Password: <code>telkomasean</code> atau <code>admin</code></li>
+                    </ul>
+                    
+                    <h3 class="fw-bold mt-4">Langkah 4: Ubah Konfigurasi WiFi</h3>
+                    <ol>
+                        <li>Pilih menu utama <strong>Local Network</strong> pada tab atas.</li>
+                        <li>Klik sub-menu <strong>WLAN</strong> di sisi kiri, lalu pilih <strong>WLAN SSID Configuration</strong>.</li>
+                        <li>Di sini Anda akan melihat beberapa SSID. Yang aktif biasanya adalah:
+                            <ul>
+                                <li><strong>SSID1 (2.4GHz):</strong> Ubah <strong>SSID Name</strong> untuk nama WiFi 2.4GHz, dan <strong>WPA Passphrase</strong> untuk passwordnya.</li>
+                                <li><strong>SSID5 (5GHz):</strong> Ubah <strong>SSID Name</strong> untuk nama WiFi 5GHz, dan <strong>WPA Passphrase</strong> untuk passwordnya.</li>
+                            </ul>
+                        </li>
+                        <li>Klik tombol <strong>Apply</strong> di setiap bagian SSID setelah Anda menggantinya.</li>
+                    </ol>
+                ',
+                'urutan' => 7,
+                'is_published' => true,
+                'created_by' => $adminId,
             ]
         ];
 

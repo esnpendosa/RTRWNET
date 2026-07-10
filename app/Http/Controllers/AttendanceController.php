@@ -374,8 +374,9 @@ class AttendanceController extends Controller
         $minInterval = Setting::get('absensi_min_interval', 5);
         $batasMasuk = Setting::get('absensi_batas_masuk', '08:00:00');
         $batasPulang = Setting::get('absensi_batas_pulang', '17:00:00');
+        $waRekapTarget = Setting::get('wa_rekap_absensi_target', '+62 821-8782-7382');
 
-        return view('kepegawaian.absensi_settings', compact('devices', 'minInterval', 'batasMasuk', 'batasPulang'));
+        return view('kepegawaian.absensi_settings', compact('devices', 'minInterval', 'batasMasuk', 'batasPulang', 'waRekapTarget'));
     }
 
     /**
@@ -388,15 +389,17 @@ class AttendanceController extends Controller
         }
 
         $request->validate([
-            'absensi_min_interval' => 'required|integer|min:0',
-            'absensi_batas_masuk'  => 'required|date_format:H:i',
-            'absensi_batas_pulang' => 'required|date_format:H:i',
-            'devices'              => 'nullable|array',
+            'absensi_min_interval'    => 'required|integer|min:0',
+            'absensi_batas_masuk'     => 'required|date_format:H:i',
+            'absensi_batas_pulang'    => 'required|date_format:H:i',
+            'devices'                 => 'nullable|array',
+            'wa_rekap_absensi_target' => 'required|string',
         ]);
 
         Setting::set('absensi_min_interval', $request->absensi_min_interval);
         Setting::set('absensi_batas_masuk', $request->absensi_batas_masuk . ':00');
         Setting::set('absensi_batas_pulang', $request->absensi_batas_pulang . ':00');
+        Setting::set('wa_rekap_absensi_target', $request->wa_rekap_absensi_target);
 
         $devices = $request->devices ?: [];
         foreach ($devices as &$device) {
@@ -590,5 +593,38 @@ class AttendanceController extends Controller
         };
 
         return response()->stream($callback, 200, $headers);
+    }
+
+    /**
+     * Kirim Rekap Absensi Manual via WhatsApp (Trigger dari UI)
+     */
+    public function sendRekapManual(\Illuminate\Http\Request $request)
+    {
+        if (Auth::user()->id_role != 1) {
+            abort(403);
+        }
+
+        $month = (int) $request->get('month', now()->subMonth()->month);
+        $year  = (int) $request->get('year',  now()->subMonth()->year);
+
+        try {
+            // Gunakan Artisan::call() secara direct agar tidak terhambat oleh fungsi shell yang dideaktivasi di php.ini (seperti exec/popen)
+            \Illuminate\Support\Facades\Artisan::call('attendance:send-monthly-recap', [
+                '--force' => true,
+                '--month' => $month,
+                '--year' => $year
+            ]);
+
+            $monthNames = [
+                1=>'Januari',2=>'Februari',3=>'Maret',4=>'April',
+                5=>'Mei',6=>'Juni',7=>'Juli',8=>'Agustus',
+                9=>'September',10=>'Oktober',11=>'November',12=>'Desember'
+            ];
+
+            return back()->with('success', "✅ Rekap absensi periode *{$monthNames[$month]} {$year}* berhasil dipicu dan dikirim ke WhatsApp!");
+        } catch (\Exception $e) {
+            Log::error("sendRekapManual Error: " . $e->getMessage());
+            return back()->with('error', 'Gagal mengirim rekap: ' . $e->getMessage());
+        }
     }
 }

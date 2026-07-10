@@ -51,30 +51,43 @@ class WhatsappClient
     public function sendFile($phone, $fileContent, $filename, $mimetype = 'application/pdf', $caption = '', $async = false)
     {
         Log::info("WhatsappClient: Attempting to send file $filename to $phone" . ($async ? " (async)" : ""));
-        try {
-            $response = Http::timeout(30)
-                ->withHeaders(['X-Bot-Secret' => $this->secret()])
-                ->post($this->baseUrl . '/send-message', [
-                    'phone'    => $phone,
-                    'media'    => base64_encode($fileContent),
-                    'filename' => $filename,
-                    'mimetype' => $mimetype,
-                    'caption'  => $caption,
-                    'async'    => $async
-                ]);
+        $payload = [
+            'phone'    => $phone,
+            'media'    => base64_encode($fileContent),
+            'filename' => $filename,
+            'mimetype' => $mimetype,
+            'caption'  => $caption,
+            'async'    => $async,
+        ];
 
-            return $response->successful();
-        } catch (\Exception $e) {
-            Log::error("WhatsappClient File Send Error: " . $e->getMessage());
-            return false;
+        // Coba 2x: attempt pertama, jika gagal retry sekali lagi
+        for ($attempt = 1; $attempt <= 2; $attempt++) {
+            try {
+                $response = Http::timeout(90) // PDF besar butuh waktu lebih lama
+                    ->withHeaders(['X-Bot-Secret' => $this->secret()])
+                    ->post($this->baseUrl . '/send-message', $payload);
+
+                if ($response->successful()) {
+                    Log::info("WhatsappClient: File $filename sent successfully to $phone (attempt $attempt)");
+                    return true;
+                }
+
+                Log::warning("WhatsappClient File Send attempt $attempt failed ({$response->status()}): " . $response->body());
+            } catch (\Exception $e) {
+                Log::error("WhatsappClient File Send Error (attempt $attempt): " . $e->getMessage());
+                if ($attempt === 2) return false;
+                sleep(3); // Tunggu 3 detik sebelum retry
+            }
         }
+
+        return false;
     }
 
     public function sendFileUrl($phone, $url, $filename, $mimetype = 'application/pdf', $caption = '', $async = false)
     {
         Log::info("WhatsappClient: Attempting to send file via URL $url to $phone" . ($async ? " (async)" : ""));
         try {
-            $response = Http::timeout(30)
+            $response = Http::timeout(90) // Naikkan timeout untuk file besar
                 ->withHeaders(['X-Bot-Secret' => $this->secret()])
                 ->post($this->baseUrl . '/send-message', [
                     'phone'    => $phone,
@@ -130,8 +143,9 @@ class WhatsappClient
 
         $caption = "Terima kasih pelanggan *{$pelanggan->kode_pelanggan}* atas pembayaran tagihan internet periode *{$monthNameIndo}* sebesar *{$amountK} ribu*. Semoga segala urusan juga rezekinya senantiasa dimudahkan dan dilancarkan selalu. Aamiin";
 
-        // Send via Base64 for better reliability
-        return $this->sendFile($pelanggan->no_wa, $pdfContent, $filename, 'application/pdf', $caption);
+        // Kirim dengan async=true agar bot langsung respond tanpa tunggu delivery WA
+        // Ini mencegah timeout saat antrian pengiriman panjang
+        return $this->sendFile($pelanggan->no_wa, $pdfContent, $filename, 'application/pdf', $caption, true);
     }
 
     public function getSessions()

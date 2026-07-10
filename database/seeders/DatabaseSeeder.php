@@ -127,5 +127,11 @@ class DatabaseSeeder extends Seeder
                 ]
             );
         }
+
+        // Call Custom Seeders
+        $this->call([
+            ModemSeeder::class,
+            TutorialSeeder::class,
+        ]);
     }
 }

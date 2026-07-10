@@ -242,14 +242,17 @@ class TagihanController extends Controller
                 }
             }
 
-            // Kirim Nota
+            // Kirim Nota setelah response (non-blocking)
             if ($pelanggan && $pelanggan->no_wa && $pelanggan->wa_active && \App\Models\Setting::get('wa_billing_notification_enabled', '1') == '1') {
-                try {
-                    $waClient = new \App\Services\WhatsappClient();
-                    $waClient->sendReceipt($tagihan, true);
-                } catch (\Exception $e) {
-                    \Illuminate\Support\Facades\Log::error('Gagal kirim nota WA dari update: ' . $e->getMessage());
-                }
+                $tid = $tagihan->id_tagihan;
+                app()->terminating(function () use ($tid) {
+                    try {
+                        $t = \App\Models\Tagihan::find($tid);
+                        if ($t) (new \App\Services\WhatsappClient())->sendReceipt($t, true);
+                    } catch (\Exception $e) {
+                        \Illuminate\Support\Facades\Log::error('Gagal kirim nota WA dari update: ' . $e->getMessage());
+                    }
+                });
             }
         }
 
@@ -685,14 +688,17 @@ class TagihanController extends Controller
             $pelanggan->update(['is_active' => true]);
         }
 
-        // Kirim Notifikasi WA jika nomor WA ada dan aktif secara global serta aktif per pelanggan
+        // Kirim Notifikasi WA setelah response (non-blocking)
         if ($pelanggan && $pelanggan->no_wa && $pelanggan->wa_active && \App\Models\Setting::get('wa_billing_notification_enabled', '1') == '1') {
-            try {
-                $waClient = new \App\Services\WhatsappClient();
-                $waClient->sendReceipt($tagihan, true);
-            } catch (\Exception $e) {
-                \Illuminate\Support\Facades\Log::error('Gagal kirim notifikasi WA: ' . $e->getMessage());
-            }
+            $tid = $tagihan->id_tagihan;
+            app()->terminating(function () use ($tid) {
+                try {
+                    $t = \App\Models\Tagihan::find($tid);
+                    if ($t) (new \App\Services\WhatsappClient())->sendReceipt($t, true);
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::error('Gagal kirim notifikasi WA verifikasi: ' . $e->getMessage());
+                }
+            });
         }
 
         $successMsg = 'Tagihan berhasil diverifikasi dan layanan diaktifkan.';
@@ -818,14 +824,17 @@ class TagihanController extends Controller
             $pelanggan->update(['is_active' => true]);
         }
 
-        // Kirim Notifikasi WA Kwitansi Lunas jika aktif secara global serta aktif per pelanggan
+        // Kirim Notifikasi WA Kwitansi Lunas setelah response (non-blocking)
         if ($pelanggan && $pelanggan->no_wa && $pelanggan->wa_active && \App\Models\Setting::get('wa_billing_notification_enabled', '1') == '1') {
-            try {
-                $waClient = new \App\Services\WhatsappClient();
-                $waClient->sendReceipt($tagihan, true);
-            } catch (\Exception $e) {
-                \Illuminate\Support\Facades\Log::error('Gagal kirim notifikasi WA Cash: ' . $e->getMessage());
-            }
+            $tid = $tagihan->id_tagihan;
+            app()->terminating(function () use ($tid) {
+                try {
+                    $t = \App\Models\Tagihan::find($tid);
+                    if ($t) (new \App\Services\WhatsappClient())->sendReceipt($t, true);
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::error('Gagal kirim notifikasi WA Cash: ' . $e->getMessage());
+                }
+            });
         }
 
         \App\Helpers\ActivityLogger::log('Mengonfirmasi pembayaran Cash untuk tagihan #' . $tagihan->id_tagihan . ' (' . ($tagihan->pelanggan ? $tagihan->pelanggan->nama_pelanggan : 'Umum') . ') sebesar Rp ' . number_format($tagihan->jumlah, 0, ',', '.'), 'tagihan');

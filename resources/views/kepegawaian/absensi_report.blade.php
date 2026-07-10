@@ -82,6 +82,14 @@
     <a href="{{ route('absensi.export', ['user_id' => $targetUserId, 'month' => $month, 'year' => $year]) }}" class="btn btn-outline-indigo rounded-pill px-4 fw-bold bg-white">
         <i class="bx bx-download me-1"></i> Ekspor CSV
     </a>
+    <form action="{{ route('absensi.send-rekap') }}" method="POST" class="d-inline">
+        @csrf
+        <input type="hidden" name="month" value="{{ $month }}">
+        <input type="hidden" name="year" value="{{ $year }}">
+        <button type="submit" class="btn btn-outline-primary rounded-pill px-4 fw-bold bg-white" onclick="return confirm('Kirim rekap absensi periode {{ \Carbon\Carbon::create()->month($month)->translatedFormat('F') }} {{ $year }} ke nomor WhatsApp target?')">
+            <i class="bx bxl-whatsapp me-1 text-success"></i> Kirim Rekap WA
+        </button>
+    </form>
 </div>
 @endif
 

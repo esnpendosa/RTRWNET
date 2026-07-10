@@ -11,6 +11,12 @@
         border-radius: 12px;
         background: linear-gradient(135deg, #f0f1ff, #e8e9ff);
         padding: 1rem;
+        transition: all 0.2s ease-in-out;
+        cursor: pointer;
+    }
+    .modem-detail-img:hover {
+        transform: scale(1.03);
+        box-shadow: 0 8px 20px rgba(105, 108, 255, 0.15);
     }
     .modem-img-placeholder-lg {
         height: 280px;
@@ -48,13 +54,30 @@
     <div class="col-md-5 mb-4">
         <div class="card border-0 shadow-sm" style="border-radius:16px;">
             <div class="card-body p-4">
-                @if($modem->image_path)
-                    <img src="{{ asset('storage/' . $modem->image_path) }}" alt="{{ $modem->nama }}" class="modem-detail-img">
-                @else
-                    <div class="modem-img-placeholder-lg"><i class="bx bx-chip"></i></div>
-                @endif
+                <div class="row g-3 mb-3">
+                    <div class="col-6 text-center">
+                        <span class="badge bg-label-secondary mb-2 w-100">Tampak Depan</span>
+                        @if($modem->image_path_front)
+                            <a href="{{ asset('storage/' . $modem->image_path_front) }}" target="_blank" title="Klik untuk memperbesar">
+                                <img src="{{ asset('storage/' . $modem->image_path_front) }}" alt="{{ $modem->nama }} Depan" class="modem-detail-img" style="max-height: 200px;">
+                            </a>
+                        @else
+                            <div class="modem-img-placeholder-lg" style="height: 160px; font-size: 3rem;"><i class="bx bx-chip"></i></div>
+                        @endif
+                    </div>
+                    <div class="col-6 text-center">
+                        <span class="badge bg-label-secondary mb-2 w-100">Tampak Belakang</span>
+                        @if($modem->image_path_back)
+                            <a href="{{ asset('storage/' . $modem->image_path_back) }}" target="_blank" title="Klik untuk memperbesar">
+                                <img src="{{ asset('storage/' . $modem->image_path_back) }}" alt="{{ $modem->nama }} Belakang" class="modem-detail-img" style="max-height: 200px;">
+                            </a>
+                        @else
+                            <div class="modem-img-placeholder-lg" style="height: 160px; font-size: 3rem;"><i class="bx bx-chip"></i></div>
+                        @endif
+                    </div>
+                </div>
 
-                <div class="d-flex flex-wrap gap-2 mt-3">
+                <div class="d-flex flex-wrap gap-2 mt-3 justify-content-center">
                     @if($modem->merek)
                         <span class="badge bg-label-primary">{{ $modem->merek }}</span>
                     @endif

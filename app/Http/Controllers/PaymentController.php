@@ -159,14 +159,18 @@ class PaymentController extends Controller
             }
         }
 
-        // Kirim Notifikasi WA (Proaktif untuk Payment Gateway)
+        // Kirim Notifikasi WA setelah response (non-blocking)
+        // Midtrans butuh response cepat, jangan block dengan pengiriman WA
         if ($pelanggan && $pelanggan->no_wa) {
-            try {
-                $waClient = new \App\Services\WhatsappClient();
-                $waClient->sendReceipt($tagihan);
-            } catch (\Exception $e) {
-                \Illuminate\Support\Facades\Log::error('Gagal kirim nota bayar Midtrans: ' . $e->getMessage());
-            }
+            $tid = $tagihan->id_tagihan;
+            app()->terminating(function () use ($tid) {
+                try {
+                    $t = \App\Models\Tagihan::find($tid);
+                    if ($t) (new \App\Services\WhatsappClient())->sendReceipt($t);
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::error('Gagal kirim nota bayar Midtrans: ' . $e->getMessage());
+                }
+            });
         }
     }
 }

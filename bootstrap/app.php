@@ -20,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
       $schedule->command('monitor:pelanggan')->everyFiveMinutes()->withoutOverlapping();
       $schedule->command('bot:goodbye')->everyMinute()->withoutOverlapping();
       $schedule->command('status:publish')->everyMinute()->withoutOverlapping();
+      $schedule->command('attendance:send-monthly-recap')->monthlyOn(10, '09:00')->withoutOverlapping();
   })
   ->withMiddleware(function (Middleware $middleware) {
       $middleware->validateCsrfTokens(except: [

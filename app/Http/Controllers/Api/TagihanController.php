@@ -138,14 +138,17 @@ class TagihanController extends Controller
             }
         }
 
-        // Try sending WhatsApp receipt if active
+        // Kirim receipt WA setelah response (non-blocking)
         if ($pelanggan && $pelanggan->no_wa && $pelanggan->wa_active && Setting::get('wa_billing_notification_enabled', '1') == '1') {
-            try {
-                $waClient = new \App\Services\WhatsappClient();
-                $waClient->sendReceipt($tagihan, true);
-            } catch (\Exception $e) {
-                Log::error('API Billing: Gagal kirim receipt WhatsApp: ' . $e->getMessage());
-            }
+            $tid = $tagihan->id_tagihan;
+            app()->terminating(function () use ($tid) {
+                try {
+                    $t = \App\Models\Tagihan::find($tid);
+                    if ($t) (new \App\Services\WhatsappClient())->sendReceipt($t, true);
+                } catch (\Exception $e) {
+                    Log::error('API Billing: Gagal kirim receipt WhatsApp: ' . $e->getMessage());
+                }
+            });
         }
 
         // Log the activity

@@ -675,13 +675,24 @@ class WhatsappController extends Controller
                 }
             }
 
-            try {
-                $waClient = new \App\Services\WhatsappClient();
-                $waClient->sendReceipt($tagihan);
-            } catch (\Exception $e) {
-                \Log::error("Failed to send receipt: " . $e->getMessage());
-            }
-            return response()->json(['reply' => "✅ VERIFIKASI OTOMATIS BERHASIL!\n\nTerima kasih, pembayaran sebesar Rp " . number_format($tagihan->jumlah, 0, ',', '.') . " telah kami terima. Layanan Anda kini sudah aktif kembali.\n\nNota digital telah dikirimkan ke nomor ini."]);
+            // Simpan tagihan ID untuk dipakai di closure (hindari capture object besar)
+            $tagihanId = $tagihan->id_tagihan;
+
+            // Kirim nota PDF SETELAH response dikirim ke bot agar tidak terjadi
+            // circular timeout (bot nunggu Laravel → Laravel nunggu bot → deadlock)
+            app()->terminating(function () use ($tagihanId) {
+                try {
+                    $t = \App\Models\Tagihan::find($tagihanId);
+                    if ($t) {
+                        $waClient = new \App\Services\WhatsappClient();
+                        $waClient->sendReceipt($t);
+                    }
+                } catch (\Exception $e) {
+                    \Log::error("Failed to send receipt (afterResponse): " . $e->getMessage());
+                }
+            });
+
+            return response()->json(['reply' => "✅ VERIFIKASI OTOMATIS BERHASIL!\n\nTerima kasih, pembayaran sebesar Rp " . number_format($tagihan->jumlah, 0, ',', '.') . " telah kami terima. Layanan Anda kini sudah aktif kembali.\n\nNota digital sedang dikirim ke nomor ini."]);
         }
 
         return response()->json(['reply' => "⚠️ Bukti transfer telah kami terima. Namun, sistem kami perlu melakukan pengecekan manual untuk memastikan validitasnya. Mohon tunggu sebentar nggih Kak, admin kami akan segera mengonfirmasi."]);

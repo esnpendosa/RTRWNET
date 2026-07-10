@@ -210,17 +210,17 @@
 <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-xl-4 g-4">
     @foreach($modems as $modem)
     @php
-        $targetUrl = $modem->ip_address 
+        $ipUrl = $modem->ip_address 
             ? (str_starts_with($modem->ip_address, 'http') ? $modem->ip_address : 'http://' . $modem->ip_address)
-            : route('modem.show', $modem);
-        $isExternal = (bool)$modem->ip_address;
+            : null;
+        $detailUrl = route('modem.show', $modem);
     @endphp
     <div class="col">
         <div class="modem-card">
             <div class="modem-img-wrap">
-                <a href="{{ $targetUrl }}" @if($isExternal) target="_blank" @endif class="modem-img-link">
-                    @if($modem->image_path)
-                        <img src="{{ asset('storage/' . $modem->image_path) }}"
+                <a href="{{ $detailUrl }}" class="modem-img-link">
+                    @if($modem->image_path_front)
+                        <img src="{{ asset('storage/' . $modem->image_path_front) }}"
                              alt="{{ $modem->nama }}"
                              loading="lazy"
                              decoding="async"
@@ -233,14 +233,14 @@
             <div class="modem-card-body">
                 <div class="modem-brand">{{ $modem->merek }}</div>
                 <div class="modem-name">
-                    <a href="{{ $targetUrl }}" @if($isExternal) target="_blank" @endif>
+                    <a href="{{ $detailUrl }}">
                         {{ $modem->nama }}
                     </a>
                 </div>
                 
                 @if($modem->ip_address)
                     <div>
-                        <a href="{{ $targetUrl }}" target="_blank" class="modem-ip-link">
+                        <a href="{{ $ipUrl }}" target="_blank" class="modem-ip-link">
                             <i class="bx bx-link-external"></i> {{ $modem->ip_address }}
                         </a>
                     </div>
@@ -250,8 +250,8 @@
                     <div class="modem-desc mb-2">{{ $modem->deskripsi }}</div>
                 @endif
                 
-                <a href="{{ $targetUrl }}" @if($isExternal) target="_blank" @endif class="btn-detail">
-                    {{ $isExternal ? 'Buka IP Modem' : 'Lihat Detail' }} <i class="bx bx-right-arrow-alt"></i>
+                <a href="{{ $detailUrl }}" class="btn-detail">
+                    Lihat Detail <i class="bx bx-right-arrow-alt"></i>
                 </a>
             </div>
         </div>

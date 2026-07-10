@@ -42,8 +42,8 @@
                 @forelse($modems as $modem)
                 <tr>
                     <td>
-                        @if($modem->image_path)
-                            <img src="{{ asset('storage/' . $modem->image_path) }}"
+                        @if($modem->image_path_front)
+                            <img src="{{ asset('storage/' . $modem->image_path_front) }}"
                                  style="width:48px;height:48px;object-fit:cover;border-radius:8px;border:1px solid #e8eaed;">
                         @else
                             <div style="width:48px;height:48px;background:#f0f1ff;border-radius:8px;display:flex;align-items:center;justify-content:center;">

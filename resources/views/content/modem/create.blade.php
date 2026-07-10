@@ -49,13 +49,22 @@
                             <textarea name="spesifikasi" class="form-control" rows="5"
                                       placeholder="Processor: ...\nRAM: ...\nPort: ...">{{ old('spesifikasi') }}</textarea>
                         </div>
-                        <div class="col-12">
-                            <label class="form-label fw-semibold">Foto Modem</label>
-                            <input type="file" name="image" class="form-control @error('image') is-invalid @enderror"
-                                   accept="image/*" id="imageInput">
-                            @error('image')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                            <div id="imagePreview" class="mt-2" style="display:none;">
-                                <img id="previewImg" style="max-height:180px;border-radius:10px;border:1px solid #e8eaed;">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Foto Depan</label>
+                            <input type="file" name="image_front" class="form-control @error('image_front') is-invalid @enderror"
+                                   accept="image/*" id="imageFrontInput">
+                            @error('image_front')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            <div id="imageFrontPreview" class="mt-2" style="display:none;">
+                                <img id="previewFrontImg" style="max-height:150px;border-radius:10px;border:1px solid #e8eaed;">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Foto Belakang</label>
+                            <input type="file" name="image_back" class="form-control @error('image_back') is-invalid @enderror"
+                                   accept="image/*" id="imageBackInput">
+                            @error('image_back')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            <div id="imageBackPreview" class="mt-2" style="display:none;">
+                                <img id="previewBackImg" style="max-height:150px;border-radius:10px;border:1px solid #e8eaed;">
                             </div>
                         </div>
                         <div class="col-12">
@@ -82,15 +91,19 @@
 
 @section('page-script')
 <script>
-document.getElementById('imageInput').addEventListener('change', function(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = function(ev) {
-        document.getElementById('previewImg').src = ev.target.result;
-        document.getElementById('imagePreview').style.display = 'block';
-    };
-    reader.readAsDataURL(file);
-});
+function setupImagePreview(inputId, previewDivId, imgId) {
+    document.getElementById(inputId).addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(ev) {
+            document.getElementById(imgId).src = ev.target.result;
+            document.getElementById(previewDivId).style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    });
+}
+setupImagePreview('imageFrontInput', 'imageFrontPreview', 'previewFrontImg');
+setupImagePreview('imageBackInput', 'imageBackPreview', 'previewBackImg');
 </script>
 @endsection

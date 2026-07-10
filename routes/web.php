@@ -306,6 +306,8 @@ Route::middleware(['auth'])->group(function () {
         Route::post('absensi/import', [\App\Http\Controllers\AttendanceController::class, 'importCsv'])->name('absensi.import');
         Route::get('absensi/export', [\App\Http\Controllers\AttendanceController::class, 'exportExcel'])->name('absensi.export');
         Route::delete('absensi/{id}', [\App\Http\Controllers\AttendanceController::class, 'destroy'])->name('absensi.destroy');
+        // Kirim rekap absensi manual via WA
+        Route::post('absensi/send-rekap', [\App\Http\Controllers\AttendanceController::class, 'sendRekapManual'])->name('absensi.send-rekap');
 
         // Keuangan & PSB
         Route::get('keuangan', [\App\Http\Controllers\KeuanganController::class, 'index'])->name('keuangan.index');

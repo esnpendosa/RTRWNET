@@ -168,6 +168,20 @@
                 </div>
             </div>
 
+            <!-- WhatsApp Recap Settings -->
+            <div class="card border-0 shadow-sm mb-4" style="border-radius: 16px;">
+                <div class="card-header bg-transparent border-0 py-3 px-4">
+                    <h5 class="fw-bold text-dark mb-0"><i class="bx bxl-whatsapp me-2 text-success"></i> REKAP BULANAN WA</h5>
+                </div>
+                <div class="card-body px-4 pb-4 pt-0">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-muted">NO. WHATSAPP PENERIMA REKAP</label>
+                        <input type="text" name="wa_rekap_absensi_target" class="form-control" value="{{ $waRekapTarget }}" required style="border-radius: 8px;" placeholder="Contoh: +6282187827382">
+                        <small class="text-muted d-block mt-1">Nomor WhatsApp tujuan untuk pengiriman otomatis PDF Rekap Absensi setiap tanggal 10.</small>
+                    </div>
+                </div>
+            </div>
+
             <!-- Submit Button Card -->
             <div class="card border-0 shadow-sm text-white overflow-hidden" style="background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%); border-radius: 16px;">
                 <div class="card-body p-4">
