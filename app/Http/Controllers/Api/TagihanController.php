@@ -111,7 +111,7 @@ class TagihanController extends Controller
 
         if ($pelanggan) {
             // Update active status in database
-            $pelanggan->update(['is_active' => true]);
+            $pelanggan->update(['is_active' => true, 'is_isolated' => false]);
 
             // Sync with MikroTik if router is configured
             if ($pelanggan->id_router) {

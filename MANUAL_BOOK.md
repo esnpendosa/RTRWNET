@@ -4,7 +4,7 @@
 
 ---
 
-**Versi 1.0.0**
+**Versi 1.1.0**
 **Rozitech Network — Ujungpangkah, Gresik**
 **Universitas Muhammadiyah Gresik (UMG)**
 **Tahun 2026**
@@ -307,6 +307,26 @@ Fitur ini memungkinkan admin memverifikasi bukti transfer dari pelanggan secara 
 2. Isi nominal pembayaran dan tanggal
 3. Upload bukti transfer (opsional)
 4. Klik **"Konfirmasi"**
+
+#### E. Edit Bukti Pembayaran *(Fitur Baru)*
+
+Fitur ini memungkinkan admin maupun pelanggan mengganti foto bukti bayar yang sudah diunggah — misalnya jika foto sebelumnya buram, salah, atau perlu diperbarui.
+
+**Untuk Admin:**
+1. Di daftar tagihan, temukan tagihan yang sudah ada bukti bayarnya
+2. Klik link **"Edit Bukti"** di samping link "Lihat Bukti"
+3. Halaman form edit terbuka — tampil foto bukti yang sedang aktif
+4. Klik **"Choose File"** → pilih foto baru (JPG/PNG/GIF/PDF, maks. 3MB)
+5. Opsional: pilih **Metode Pembayaran**
+6. Centang **"Verifikasi & Tandai Sebagai Lunas"** jika ingin langsung memverifikasi
+7. Klik **"Simpan Perubahan"**
+
+**Untuk Pelanggan:**
+- Pelanggan hanya bisa mengedit bukti bayar milik tagihan mereka sendiri
+- Setelah edit, status kembali ke **Menunggu Verifikasi** untuk dicek admin
+- Pelanggan tidak bisa centang opsi Tandai Lunas (hanya admin)
+
+> **Aturan file**: Format yang diterima: JPG, JPEG, PNG, GIF, PDF. Maksimal ukuran: **3MB**.
 
 ---
 

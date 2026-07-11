@@ -175,7 +175,7 @@ class TagihanController extends Controller
                     $mikrotikService = app(\App\Services\MikrotikService::class);
                     $success = $mikrotikService->setSecretStatus($pelanggan->router, $pelanggan->mikrotik_username ?: $pelanggan->kode_pelanggan, $pelanggan->mikrotik_type, false, $pelanggan->ip_address);
                     if ($success) {
-                        $pelanggan->update(['is_active' => true]);
+                        $pelanggan->update(['is_active' => true, 'is_isolated' => false]);
                     }
                 } catch (\Exception $e) {
                     \Illuminate\Support\Facades\Log::error('Gagal sync Mikrotik pada tambah tagihan: ' . $e->getMessage());
@@ -238,7 +238,7 @@ class TagihanController extends Controller
                 $mikrotikService = app(\App\Services\MikrotikService::class);
                 $success = $mikrotikService->setSecretStatus($pelanggan->router, $pelanggan->mikrotik_username ?: $pelanggan->kode_pelanggan, $pelanggan->mikrotik_type, false, $pelanggan->ip_address);
                 if ($success) {
-                    $pelanggan->update(['is_active' => true]);
+                    $pelanggan->update(['is_active' => true, 'is_isolated' => false]);
                 }
             }
 
@@ -663,7 +663,7 @@ class TagihanController extends Controller
 
         if ($pelanggan && $pelanggan->id_router) {
             // Tandai aktif di DB terlebih dahulu (pembayaran sudah diverifikasi admin)
-            $pelanggan->update(['is_active' => true]);
+            $pelanggan->update(['is_active' => true, 'is_isolated' => false]);
 
             // Sinkronisasi ke MikroTik (best-effort)
             try {
@@ -685,7 +685,7 @@ class TagihanController extends Controller
             }
         } elseif ($pelanggan) {
             // Tidak ada router terkonfigurasi, tetap tandai aktif
-            $pelanggan->update(['is_active' => true]);
+            $pelanggan->update(['is_active' => true, 'is_isolated' => false]);
         }
 
         // Kirim Notifikasi WA setelah response (non-blocking)
@@ -799,7 +799,7 @@ class TagihanController extends Controller
 
         if ($pelanggan && $pelanggan->id_router) {
             // Tandai aktif di DB terlebih dahulu (pembayaran sudah dikonfirmasi admin)
-            $pelanggan->update(['is_active' => true]);
+            $pelanggan->update(['is_active' => true, 'is_isolated' => false]);
 
             // Sinkronisasi ke MikroTik (best-effort)
             try {
@@ -821,7 +821,7 @@ class TagihanController extends Controller
             }
         } elseif ($pelanggan) {
             // Tidak ada router terkonfigurasi, tetap tandai aktif
-            $pelanggan->update(['is_active' => true]);
+            $pelanggan->update(['is_active' => true, 'is_isolated' => false]);
         }
 
         // Kirim Notifikasi WA Kwitansi Lunas setelah response (non-blocking)

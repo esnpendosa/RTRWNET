@@ -221,29 +221,50 @@ class FingerprintService
             if ($noWa) {
                 $hariTanggal = $dateTime->locale('id')->translatedFormat('l, d F Y');
                 $namaId = strtoupper($user->name) . " (" . ($pin ?: '-') . ")";
-                
+
                 if ($isNewMasuk && !$isNewPulang) {
                     $pesan = "📢 *NOTIFIKASI ABSENSI MASUK*\n\n"
                            . "📅 Hari/Tgl: *{$hariTanggal}*\n"
                            . "👤 Nama: *{$namaId}*\n"
-                           . "⏰ Waktu: *{$time} WIB*\n"
+                           . "⏰ Jam Masuk: *{$time} WIB*\n"
                            . "📍 Lokasi: *{$deviceName}*\n"
                            . "📝 Status: *{$absensi->status_kehadiran}*\n\n"
                            . "Selamat bekerja! Tetap semangat dan jaga keselamatan selalu. 💪";
                 } else {
+                    $jamMasuk = $absensi->jam_masuk ?? '--:--:--';
+                    $jamPulang = $absensi->jam_pulang ?? '--:--:--';
+                    
+                    // Hitung durasi kerja jika masuk dan pulang tersedia
+                    $durasiKerja = '';
+                    if ($absensi->jam_masuk && $absensi->jam_pulang) {
+                        try {
+                            $masukCarbon = Carbon::parse($absensi->jam_masuk);
+                            $pulangCarbon = Carbon::parse($absensi->jam_pulang);
+                            $durasiMenit = $masukCarbon->diffInMinutes($pulangCarbon);
+                            $jam = intdiv($durasiMenit, 60);
+                            $menit = $durasiMenit % 60;
+                            $durasiKerja = "\n⏱️ Durasi Kerja: *{$jam} jam {$menit} menit*";
+                        } catch (\Exception $e) {}
+                    }
+
                     $pesan = "📢 *NOTIFIKASI ABSENSI PULANG*\n\n"
                            . "📅 Hari/Tgl: *{$hariTanggal}*\n"
                            . "👤 Nama: *{$namaId}*\n"
-                           . "⏰ Waktu Pulang: *{$time} WIB*\n"
-                           . "📍 Lokasi: *{$deviceName}*\n"
-                           . "📝 Status Hari Ini: *{$absensi->status_kehadiran}*\n\n"
+                           . "📍 Lokasi: *{$deviceName}*\n\n"
                            . "Detail Kehadiran:\n"
-                           . "📥 Jam Masuk: " . ($absensi->jam_masuk ?? '--:--:--') . "\n"
-                           . "📤 Jam Pulang: " . ($absensi->jam_pulang ?? '--:--:--') . "\n\n"
+                           . "📥 Jam Masuk: *{$jamMasuk} WIB*\n"
+                           . "📤 Jam Pulang: *{$jamPulang} WIB*"
+                           . $durasiKerja . "\n"
+                           . "📝 Status: *{$absensi->status_kehadiran}*\n\n"
                            . "Terima kasih atas kerja keras Anda hari ini. Selamat beristirahat dan hati-hati di jalan! 🏡";
                 }
 
-                $waClient->sendMessage($noWa, $pesan);
+                // Non-blocking: jika WA bot mati tidak akan menghambat proses fingerprint
+                try {
+                    $waClient->sendMessage($noWa, $pesan, true);
+                } catch (\Exception $e) {
+                    Log::warning("FINGERPRINT: Gagal kirim notif WA ke {$noWa}: " . $e->getMessage());
+                }
             }
         }
     }

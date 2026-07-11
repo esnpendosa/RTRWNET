@@ -23,16 +23,19 @@ class WhatsappClient
 
     public function sendMessage($phone, $data, $async = false)
     {
+        if ($this->shouldBlockMessage($phone)) {
+            return false;
+        }
         Log::info("WhatsappClient: Attempting to send message to $phone via " . $this->baseUrl . ($async ? " (async)" : ""));
         try {
             $message = is_array($data) ? ($data['text'] ?? '') : $data;
             
-            $response = Http::timeout(15)
+            $response = Http::timeout(5) // Kurangi timeout: jika bot mati, tidak blokir lama
                 ->withHeaders(['X-Bot-Secret' => $this->secret()])
                 ->post($this->baseUrl . '/send-message', [
                     'phone'   => $phone,
                     'message' => $message,
-                    'async'   => $async
+                    'async'   => true // Selalu async agar bot langsung balas tanpa tunggu delivery
                 ]);
 
             if (!$response->successful()) {
@@ -50,6 +53,9 @@ class WhatsappClient
 
     public function sendFile($phone, $fileContent, $filename, $mimetype = 'application/pdf', $caption = '', $async = false)
     {
+        if ($this->shouldBlockMessage($phone)) {
+            return false;
+        }
         Log::info("WhatsappClient: Attempting to send file $filename to $phone" . ($async ? " (async)" : ""));
         $payload = [
             'phone'    => $phone,
@@ -57,13 +63,13 @@ class WhatsappClient
             'filename' => $filename,
             'mimetype' => $mimetype,
             'caption'  => $caption,
-            'async'    => $async,
+            'async'    => true, // Selalu async agar bot langsung balas tanpa tunggu delivery WA
         ];
 
         // Coba 2x: attempt pertama, jika gagal retry sekali lagi
         for ($attempt = 1; $attempt <= 2; $attempt++) {
             try {
-                $response = Http::timeout(90) // PDF besar butuh waktu lebih lama
+                $response = Http::timeout(10) // Kurangi dari 90s ke 10s karena async=true
                     ->withHeaders(['X-Bot-Secret' => $this->secret()])
                     ->post($this->baseUrl . '/send-message', $payload);
 
@@ -76,7 +82,7 @@ class WhatsappClient
             } catch (\Exception $e) {
                 Log::error("WhatsappClient File Send Error (attempt $attempt): " . $e->getMessage());
                 if ($attempt === 2) return false;
-                sleep(3); // Tunggu 3 detik sebelum retry
+                sleep(1); // Kurangi dari 3 detik ke 1 detik
             }
         }
 
@@ -85,6 +91,9 @@ class WhatsappClient
 
     public function sendFileUrl($phone, $url, $filename, $mimetype = 'application/pdf', $caption = '', $async = false)
     {
+        if ($this->shouldBlockMessage($phone)) {
+            return false;
+        }
         Log::info("WhatsappClient: Attempting to send file via URL $url to $phone" . ($async ? " (async)" : ""));
         try {
             $response = Http::timeout(90) // Naikkan timeout untuk file besar
@@ -109,6 +118,9 @@ class WhatsappClient
     {
         $pelanggan = $tagihan->pelanggan;
         if (!$pelanggan || !$pelanggan->no_wa) return false;
+        if ($this->shouldBlockMessage($pelanggan->no_wa)) {
+            return false;
+        }
 
         $monthName = date('F', mktime(0, 0, 0, $tagihan->bulan, 10));
         $amount = number_format($tagihan->jumlah, 0, ',', '.');
@@ -227,5 +239,26 @@ class WhatsappClient
             Log::error("WhatsappClient Status Connection Error: " . $e->getMessage());
             return false;
         }
+    }
+    public function shouldBlockMessage($phone)
+    {
+        $cleanPhone = preg_replace('/[^0-9]/', '', $phone);
+        if (empty($cleanPhone)) {
+            return false;
+        }
+
+        // Try to match the customer in the database by their no_wa
+        $customer = \App\Models\Pelanggan::where(function($q) use ($cleanPhone) {
+            $q->where('no_wa', 'like', '%' . $cleanPhone . '%')
+              ->orWhere('no_wa', 'like', '%' . substr($cleanPhone, 2) . '%');
+        })->first();
+
+        // Block if customer is deactivated manually (is_active is false and is_isolated is false)
+        if ($customer && !$customer->is_active && !$customer->is_isolated) {
+            Log::info("WhatsappClient: Blocking message to manually deactivated customer: {$customer->nama_pelanggan} ({$phone})");
+            return true;
+        }
+
+        return false;
     }
 }

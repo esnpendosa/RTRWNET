@@ -298,6 +298,9 @@ Route::middleware(['auth'])->group(function () {
     // Kepegawaian & Absensi Pegawai
     Route::get('absensi', [\App\Http\Controllers\AttendanceController::class, 'index'])->name('absensi.index');
     Route::get('absensi/today', [\App\Http\Controllers\AttendanceController::class, 'today'])->name('absensi.today');
+    Route::get('absensi/send-rekap', function() {
+        return redirect()->route('absensi.index');
+    });
     
     Route::middleware('can:user_manage')->group(function() {
         Route::get('absensi/settings', [\App\Http\Controllers\AttendanceController::class, 'showSettings'])->name('absensi.settings');
