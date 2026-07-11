@@ -112,13 +112,13 @@ class TagihanController extends Controller
             });
         }
 
-        // OPTIMIZATION: Join pelanggan untuk sort natural berdasarkan angka di kode_pelanggan
-        // Contoh: A1 < A2 < A10 < A17 < A20 < A100 < A109 (natural numeric sort)
+        // Sort: prefix huruf dulu (A, AB, AC, dst), lalu angka secara numerik (1, 2, 10, 100)
+        // Contoh hasil: A1, A2, A10, A100, AB1, AB2, AC1, dst
         $query->join('pelanggan', 'pelanggan.id_pelanggan', '=', 'tagihan.id_pelanggan')
               ->select('tagihan.*')
               ->orderByRaw("
-                  REGEXP_REPLACE(pelanggan.kode_pelanggan, '[^0-9]', '') + 0,
                   REGEXP_REPLACE(pelanggan.kode_pelanggan, '[0-9]', ''),
+                  CAST(REGEXP_REPLACE(pelanggan.kode_pelanggan, '[^0-9]', '') AS UNSIGNED),
                   tagihan.tahun,
                   tagihan.bulan
               ");
