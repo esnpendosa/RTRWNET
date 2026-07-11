@@ -164,8 +164,14 @@ class FingerprintService
         // 1. Determine check-in (earliest scan)
         if (!$absensi->jam_masuk || $time < $absensi->jam_masuk) {
             if ($status == 0 || !$absensi->jam_masuk) {
+                // Jika sudah ada jam_masuk sebelumnya, geser ke jam_pulang
+                // HANYA jika jam_masuk lama itu lebih besar dari jam_masuk baru
+                // dan belum ada jam_pulang — artinya ini scan masuk yang lebih awal
                 if ($absensi->jam_masuk && !$absensi->jam_pulang) {
                     $absensi->jam_pulang = $absensi->jam_masuk;
+                    // Tandai pulang hanya jika beda lebih dari minInterval
+                    $diffMinutes = Carbon::parse($time)->diffInMinutes(Carbon::parse($absensi->jam_masuk));
+                    $isNewPulang = $diffMinutes >= $minInterval;
                 }
                 $absensi->jam_masuk = $time;
                 $absensi->pin = $pin;

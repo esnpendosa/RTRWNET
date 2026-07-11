@@ -18,6 +18,7 @@ class TagihanController extends Controller
         $user = auth()->user();
         
         // OPTIMIZATION: Eager load relationships to prevent N+1 queries
+        // Note: select tagihan.* explicitly because of join below
         $query = Tagihan::with(['pelanggan' => function($q) {
             $q->select('id_pelanggan', 'kode_pelanggan', 'nama_pelanggan', 'id_user', 'no_wa', 'wa_active');
         }]);
@@ -111,15 +112,16 @@ class TagihanController extends Controller
             });
         }
 
-        // OPTIMIZATION: Use pagination instead of get() + sort to reduce memory usage
-        // Order by database instead of collection sort for better performance
-        $query->orderByRaw("CONCAT(
-            COALESCE((SELECT kode_pelanggan FROM pelanggan WHERE pelanggan.id_pelanggan = tagihan.id_pelanggan), ''), 
-            '_', 
-            LPAD(tahun, 4, '0'), 
-            '_', 
-            LPAD(bulan, 2, '0')
-        )");
+        // OPTIMIZATION: Join pelanggan untuk sort natural berdasarkan angka di kode_pelanggan
+        // Contoh: A1 < A2 < A10 < A17 < A20 < A100 < A109 (natural numeric sort)
+        $query->join('pelanggan', 'pelanggan.id_pelanggan', '=', 'tagihan.id_pelanggan')
+              ->select('tagihan.*')
+              ->orderByRaw("
+                  REGEXP_REPLACE(pelanggan.kode_pelanggan, '[^0-9]', '') + 0,
+                  REGEXP_REPLACE(pelanggan.kode_pelanggan, '[0-9]', ''),
+                  tagihan.tahun,
+                  tagihan.bulan
+              ");
         
         // OPTIMIZATION: Use pagination to limit records loaded per page
         $tagihan = $query->paginate(50)->appends($request->query());
