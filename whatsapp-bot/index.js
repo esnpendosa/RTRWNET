@@ -45,7 +45,6 @@ const sessions      = new Map(); // id -> sock
 const sessionStates = new Map(); // id -> { id, status, user, qr, ... }
 const sessionContacts = new Map(); // id -> [jid1, jid2, ...]
 const processedMessages = new Set(); // Cache for message IDs to prevent loops
-const userReplyTracker = new Map(); // remoteJid -> Array of reply timestamps to prevent infinite loops
 
 // ─── Middleware ────────────────────────────────────────────────────────────────
 const requireSecret = (req, res, next) => {
@@ -334,33 +333,9 @@ async function startSession(id, opts = {}) {
                 console.log(`[WEBHOOK] Respon dari Laravel:`, JSON.stringify(data));
                 if (!data) return;
 
-                // Cek apakah ada balasan yang perlu dikirim
-                const hasReply = data.reply || data.text || data.buttons || data.sections || data.image || data.document;
-                if (!hasReply) {
-                    return; // Lewati jika tidak ada balasan (tidak memicu status mengetik kosong)
-                }
-
-                // Cek & Batasi loop / spam ke tujuan yang sama (Max 5 pesan per 60 detik)
-                const nowTs = Date.now();
-                let userReplies = userReplyTracker.get(remoteJid) || [];
-                userReplies = userReplies.filter(ts => nowTs - ts < 60000); // filter hanya 60 detik terakhir
-
-                if (userReplies.length >= 5) {
-                    console.warn(`[ANTI-LOOP] Mencegah potensi loop/spam ke ${remoteJid}. Balasan dibatalkan.`);
-                    return;
-                }
-
-                userReplies.push(nowTs);
-                userReplyTracker.set(remoteJid, userReplies);
-
-                // Simulasi Jeda & Mengetik secara manusiawi berdasarkan panjang teks (Anti-Ban)
-                const textToType = data.reply || data.text || '';
-                // Asumsi kecepatan ketik manusia: 50ms per karakter, minimal 1 detik, maksimal 4 detik
-                const baseDelay = Math.min(Math.max(textToType.length * 40, 1000), 4000);
-                const randomDelay = Math.floor(Math.random() * 800);
-                const delay = baseDelay + randomDelay;
-
+                // Simulasi Jeda & Mengetik agar lebih "Manusiawi" (Anti-Ban)
                 await sock.sendPresenceUpdate('composing', remoteJid);
+                const delay = Math.floor(Math.random() * 1500) + 1500; // 1.5 - 3 detik
                 await sleep(delay);
                 await sock.sendPresenceUpdate('paused', remoteJid);
 

@@ -34,20 +34,47 @@ class SendMonthlyAttendanceRecap extends Command
     {
         set_time_limit(0);
 
-        // Get target phone number
-        $targetPhone = Setting::get('wa_rekap_absensi_target', '6282187827382');
-        if (empty($targetPhone)) {
-            $this->error('Target WhatsApp number is not configured.');
+        // Gather recipient numbers
+        $recipientPhones = [];
+
+        // 1. Add target phone from setting if configured
+        $settingTarget = Setting::get('wa_rekap_absensi_target');
+        if (!empty($settingTarget)) {
+            $recipientPhones[] = $settingTarget;
+        }
+
+        // 2. Add all Admin, Magang, and Teknisi users (exclude fachrozi/facrozi)
+        $targetUsers = User::whereHas('role', function ($query) {
+            $query->whereIn('name', ['Admin', 'Magang', 'Teknisi']);
+        })->whereNotNull('no_hp')
+          ->where('no_hp', '!=', '')
+          ->where('name', 'not like', '%facrozi%')
+          ->where('name', 'not like', '%fachrozi%')
+          ->get();
+
+        foreach ($targetUsers as $tu) {
+            $recipientPhones[] = $tu->no_hp;
+        }
+
+        // 3. Sanitize and de-duplicate numbers
+        $uniquePhones = [];
+        foreach ($recipientPhones as $phone) {
+            $cleaned = preg_replace('/[\s\-\(\)]/', '', $phone);
+            $cleaned = ltrim($cleaned, '+');
+            if (str_starts_with($cleaned, '0')) {
+                $cleaned = '62' . substr($cleaned, 1);
+            }
+            if (!empty($cleaned) && !in_array($cleaned, $uniquePhones)) {
+                $uniquePhones[] = $cleaned;
+            }
+        }
+
+        if (empty($uniquePhones)) {
+            $this->error('No target phone numbers or staff numbers found.');
             return;
         }
 
-        // Sanitasi nomor WA: hapus spasi, tanda +, dan strip (format harus 628xxx)
-        $targetPhone = preg_replace('/[\s\-\(\)]/', '', $targetPhone);  // hapus spasi, strip, kurung
-        $targetPhone = ltrim($targetPhone, '+');                         // hapus leading +
-        if (str_starts_with($targetPhone, '0')) {
-            $targetPhone = '62' . substr($targetPhone, 1);              // 08xxx → 628xxx
-        }
-        $this->info("Target phone (sanitized): {$targetPhone}");
+        $this->info("Recipients list: " . implode(', ', $uniquePhones));
 
         // Determine month and year
         if ($this->option('force') && $this->option('month') && $this->option('year')) {
@@ -62,42 +89,87 @@ class SendMonthlyAttendanceRecap extends Command
 
         $this->info("Generating employee attendance recap for {$month}/{$year}...");
 
-        // Fetch users (exclude customers: id_role == 4)
-        $allUsers = User::where('id_role', '!=', 4)->orderBy('name')->get();
+        // Fetch users (exclude customers: id_role == 4 and fachrozi/facrozi)
+        $allUsers = User::where('id_role', '!=', 4)
+            ->where('name', 'not like', '%facrozi%')
+            ->where('name', 'not like', '%fachrozi%')
+            ->orderBy('name')
+            ->get();
 
         if ($allUsers->isEmpty()) {
             $this->warn('No employees found to generate attendance recap.');
             return;
         }
 
+        $startDate = Carbon::create($year, $month, 11)->subMonth()->startOfDay();
+        $endDate = Carbon::create($year, $month, 10)->endOfDay();
+
+        $startDateFormatted = $startDate->translatedFormat('d F Y');
+        $endDateFormatted = $endDate->translatedFormat('d F Y');
+        $periodeLabel = "{$startDateFormatted} s/d {$endDateFormatted}";
+
         $reportData = [];
-        $daysInMonth = Carbon::create($year, $month, 1)->daysInMonth;
+        $batasMasukStr = Setting::get('absensi_batas_masuk', '08:00:00');
+        $batasMasukTime = Carbon::parse($batasMasukStr);
 
         foreach ($allUsers as $u) {
             $uAbsensis = Absensi::where('user_id', $u->id)
-                ->whereMonth('tgl', $month)
-                ->whereYear('tgl', $year)
+                ->whereBetween('tgl', [$startDate->toDateString(), $endDate->toDateString()])
                 ->get();
             
             $hadir = $uAbsensis->whereIn('status_kehadiran', ['Hadir', 'Terlambat', 'Pulang Lebih Awal', 'Terlambat & Pulang Awal'])->count();
             
             $workDays = 0;
-            $maxDay = ($month == (int)date('n') && $year == (int)date('Y')) ? (int)date('j') : $daysInMonth;
+            $currentDate = $startDate->copy();
+            $periodEndDate = $endDate->greaterThan(now()) ? now() : $endDate;
 
-            for ($d = 1; $d <= $maxDay; $d++) {
-                $carbonDate = Carbon::create($year, $month, $d);
-                if (!$carbonDate->isWeekend()) {
+            while ($currentDate->lessThanOrEqualTo($periodEndDate)) {
+                if (!$currentDate->isWeekend()) {
                     $workDays++;
                 }
+                $currentDate->addDay();
             }
             
             $alpha = max(0, $workDays - $hadir);
+
+            $totalWorkingHours = 0;
+            $totalLateMinutes = 0;
+
+            foreach ($uAbsensis as $abs) {
+                // hitung jam kerja
+                if ($abs->jam_masuk && $abs->jam_pulang) {
+                    try {
+                        $masuk = Carbon::parse($abs->jam_masuk);
+                        $pulang = Carbon::parse($abs->jam_pulang);
+                        if ($pulang->greaterThan($masuk)) {
+                            $totalWorkingHours += $pulang->diffInMinutes($masuk, true) / 60;
+                        }
+                    } catch (\Exception $e) {
+                        Log::error("Error parsing attendance times for user {$u->id}: " . $e->getMessage());
+                    }
+                }
+
+                // hitung jam telat
+                if ($abs->jam_masuk) {
+                    try {
+                        $masuk = Carbon::parse($abs->jam_masuk);
+                        if ($masuk->greaterThan($batasMasukTime)) {
+                            $totalLateMinutes += $masuk->diffInMinutes($batasMasukTime, true);
+                        }
+                    } catch (\Exception $e) {
+                        Log::error("Error parsing late hours for user {$u->id}: " . $e->getMessage());
+                    }
+                }
+            }
+            $totalWorkingHours = (int) round($totalWorkingHours);
+            $totalLateHours = (int) round($totalLateMinutes / 60);
 
             $reportData[] = [
                 'user' => $u,
                 'hadir' => $hadir,
                 'alpha' => $alpha,
-                'persentase' => $workDays > 0 ? round(($hadir / $workDays) * 100) : 0
+                'jam_telat' => $totalLateHours,
+                'total_jam_kerja' => $totalWorkingHours
             ];
         }
 
@@ -113,7 +185,7 @@ class SendMonthlyAttendanceRecap extends Command
         $reportDate = now()->translatedFormat('d F Y');
 
         // Generate PDF
-        $pdf = Pdf::loadView('kepegawaian.absensi_pdf', compact('reportData', 'monthName', 'year', 'reportDate'))
+        $pdf = Pdf::loadView('kepegawaian.absensi_pdf', compact('reportData', 'monthName', 'year', 'reportDate', 'periodeLabel'))
             ->setOption('isRemoteEnabled', true);
         $pdfContent = $pdf->output();
 
@@ -132,19 +204,22 @@ class SendMonthlyAttendanceRecap extends Command
             Log::warning("SendMonthlyAttendanceRecap: Could not save copy of PDF to storage: " . $e->getMessage());
         }
 
-        $caption = "Berikut adalah laporan *Rekapitulasi Kehadiran Pegawai* Rozitech Multimedia Indonesia untuk periode *{$monthName} {$year}* dalam format PDF.";
-
-        $this->info("Sending PDF to {$targetPhone} via WhatsApp...");
+        $caption = "Berikut adalah laporan *Rekapitulasi Kehadiran Pegawai* Rozitech Multimedia Indonesia untuk periode *{$periodeLabel}* dalam format PDF.";
 
         $waClient = new WhatsappClient();
-        $success = $waClient->sendFile($targetPhone, $pdfContent, $filename, 'application/pdf', $caption);
+        $sentCount = 0;
 
-        if ($success) {
-            $this->info("Successfully sent attendance recap to {$targetPhone}.");
-            Log::info("SendMonthlyAttendanceRecap: Attendance recap for {$monthName} {$year} sent to {$targetPhone} successfully.");
-        } else {
-            $this->error("Failed to send attendance recap to {$targetPhone}.");
-            Log::error("SendMonthlyAttendanceRecap: Failed to send attendance recap for {$monthName} {$year} to {$targetPhone}.");
+        foreach ($uniquePhones as $phone) {
+            $this->info("Sending PDF to {$phone} via WhatsApp...");
+            $success = $waClient->sendFile($phone, $pdfContent, $filename, 'application/pdf', $caption);
+            if ($success) {
+                $sentCount++;
+                $this->info("  ✓ Successfully sent to {$phone}.");
+            } else {
+                $this->error("  ✗ Failed to send to {$phone}.");
+            }
         }
+
+        $this->info("Attendance recap sending completed. Sent to {$sentCount} of " . count($uniquePhones) . " recipients.");
     }
 }

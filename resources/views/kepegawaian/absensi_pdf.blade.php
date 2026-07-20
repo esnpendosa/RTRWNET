@@ -126,17 +126,17 @@
     </div>
 
     <div class="title">Laporan Rekapitulasi Kehadiran Pegawai</div>
-    <div class="subtitle">Periode Bulan: {{ $monthName }} {{ $year }}</div>
+    <div class="subtitle">Periode: {{ $periodeLabel }}</div>
 
     <table class="report-table">
         <thead>
             <tr>
                 <th style="width: 5%;">No</th>
-                <th style="text-align: left; width: 45%;">Nama Pegawai</th>
-                <th style="width: 15%;">PIN Sidik Jari</th>
-                <th style="width: 10%;">Hadir</th>
-                <th style="width: 10%;">Alpha</th>
-                <th style="width: 15%;">% Kehadiran</th>
+                <th style="text-align: left; width: 35%;">Nama Pegawai</th>
+                <th style="width: 15%;">Total Kehadiran</th>
+                <th style="width: 15%;">Jam Telat</th>
+                <th style="width: 15%;">Alpha</th>
+                <th style="width: 15%;">Total Jam Kerja</th>
             </tr>
         </thead>
         <tbody>
@@ -144,10 +144,10 @@
             <tr>
                 <td class="text-center">{{ $index + 1 }}</td>
                 <td class="font-bold">{{ $row['user']->name }}</td>
-                <td class="text-center">{{ $row['user']->pin_fingerspot ?? '-' }}</td>
                 <td class="text-center font-bold text-success">{{ $row['hadir'] }} Hari</td>
+                <td class="text-center font-bold text-danger">{{ $row['jam_telat'] }} Jam</td>
                 <td class="text-center font-bold text-danger">{{ $row['alpha'] }} Hari</td>
-                <td class="text-center font-bold">{{ $row['persentase'] }}%</td>
+                <td class="text-center font-bold" style="color: #1e3a8a;">{{ $row['total_jam_kerja'] }} Jam</td>
             </tr>
             @empty
             <tr>

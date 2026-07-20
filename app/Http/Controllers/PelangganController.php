@@ -166,6 +166,7 @@ class PelangganController extends Controller
         }
 
         $validated['gratis_pemasangan'] = $request->has('gratis_pemasangan');
+        $validated['is_isolated'] = false;
         $pelanggan->update($validated);
 
         // Sync with User account if email changed
@@ -378,7 +379,10 @@ class PelangganController extends Controller
     public function toggleStatus(Pelanggan $pelanggan)
     {
         $newStatus = $pelanggan->is_active ? 0 : 1;
-        $pelanggan->update(['is_active' => $newStatus]);
+        $pelanggan->update([
+            'is_active' => $newStatus,
+            'is_isolated' => false
+        ]);
 
         if ($pelanggan->id_router) {
             $mikrotik = new \App\Services\MikrotikService();

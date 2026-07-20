@@ -44,33 +44,7 @@ yarn-error.log
 /*.xlsx
 /~$*.xlsx
 
-# Scratch and temporary files
-/scratch
-/scratch_*
-*.docx
-
-# File debug/test sementara (tidak perlu di repo)
-/check_*.php
-/test_*.php
-/sync_ips.php
-/inspect_excel.php
-
-# File dokumen skripsi besar (simpan terpisah)
-/*.pptx
-/~$*.pptx
-/*.pdf
-
-# Gambar tabel analisis (bukan aset web)
-/tabel_*.png
-
-# Folder ekstrak sementara
-/temp_docx_extract_v2
-
-# File template tidak terpakai
-/documentation.html
-/hire-us.html
-/index.php
-
-# TRAINING_GUIDE sudah digabung ke README.md
-/TRAINING_GUIDE.md
-
+# Ignore scratch scripts and documents
+/scratch/
+/scratch_*.php
+/*.docx

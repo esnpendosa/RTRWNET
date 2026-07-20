@@ -29,6 +29,7 @@ class Pelanggan extends Model
         'paket',
         'harga_layanan',
         'is_active',
+        'is_isolated',
         'wa_active',
         'prioritas_label',
         'ip_address',

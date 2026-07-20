@@ -179,11 +179,19 @@ class AttendanceController extends Controller
         $month = $request->filled('month') ? (int) $request->month : (int) date('n');
         $year = $request->filled('year') ? (int) $request->year : (int) date('Y');
         
+        $startDate = Carbon::create($year, $month, 11)->subMonth()->startOfDay();
+        $endDate = Carbon::create($year, $month, 10)->endOfDay();
+        $periodeLabel = $startDate->translatedFormat('d F Y') . ' s/d ' . $endDate->translatedFormat('d F Y');
+        
         $defaultTab = ($targetUserId === 'all') ? 'bulanan' : 'harian';
         $tab = $request->get('tab', $defaultTab);
 
-        // Fetch all employees (exclude Pelanggan)
-        $allUsers = User::where('id_role', '!=', 4)->orderBy('name')->get();
+        // Fetch all employees (exclude Pelanggan and fachrozi/facrozi)
+        $allUsers = User::where('id_role', '!=', 4)
+            ->where('name', 'not like', '%facrozi%')
+            ->where('name', 'not like', '%fachrozi%')
+            ->orderBy('name')
+            ->get();
 
         $counts = [
             'hadir' => 0, 'alpha' => 0, 'total' => 0
@@ -194,9 +202,8 @@ class AttendanceController extends Controller
             if ($tab === 'harian') {
                 $perPage = $request->get('per_page', 50);
                 $query = Absensi::with('user')
-                    ->whereMonth('tgl', $month)
-                    ->whereYear('tgl', $year)
-                    ->whereHas('user', fn($q) => $q->where('id_role', '!=', 4));
+                    ->whereBetween('tgl', [$startDate->toDateString(), $endDate->toDateString()])
+                    ->whereHas('user', fn($q) => $q->where('id_role', '!=', 4)->where('name', 'not like', '%facrozi%')->where('name', 'not like', '%fachrozi%'));
                 
                 $reportData = $query->orderBy('tgl', 'desc')->paginate($perPage);
                 
@@ -208,29 +215,27 @@ class AttendanceController extends Controller
 
                 $targetUser = (object)['id' => 'all', 'name' => 'SEMUA PEGAWAI', 'kode_pegawai' => '-'];
                 
-                return view('kepegawaian.absensi_report', compact('tab', 'reportData', 'month', 'year', 'targetUser', 'counts', 'allUsers', 'targetUserId'));
+                return view('kepegawaian.absensi_report', compact('tab', 'reportData', 'month', 'year', 'targetUser', 'counts', 'allUsers', 'targetUserId', 'periodeLabel'));
             }
 
             $reportData = [];
-            $daysInMonth = Carbon::create($year, $month, 1)->daysInMonth;
 
             foreach ($allUsers as $u) {
                 $uAbsensis = Absensi::where('user_id', $u->id)
-                    ->whereMonth('tgl', $month)
-                    ->whereYear('tgl', $year)
+                    ->whereBetween('tgl', [$startDate->toDateString(), $endDate->toDateString()])
                     ->get();
                 
                 $hadir = $uAbsensis->whereIn('status_kehadiran', ['Hadir', 'Terlambat', 'Pulang Lebih Awal', 'Terlambat & Pulang Awal'])->count();
                 
                 $workDays = 0;
-                $maxDay = ($month == date('n') && $year == date('Y')) ? date('j') : $daysInMonth;
+                $currentDate = $startDate->copy();
+                $periodEndDate = $endDate->greaterThan(now()) ? now() : $endDate;
 
-                // Simple check for workdays (skip weekends)
-                for ($d = 1; $d <= $maxDay; $d++) {
-                    $carbonDate = Carbon::create($year, $month, $d);
-                    if (!$carbonDate->isWeekend()) {
+                while ($currentDate->lessThanOrEqualTo($periodEndDate)) {
+                    if (!$currentDate->isWeekend()) {
                         $workDays++;
                     }
+                    $currentDate->addDay();
                 }
                 
                 $alpha = max(0, $workDays - $hadir);
@@ -249,14 +254,13 @@ class AttendanceController extends Controller
 
             $targetUser = (object)['id' => 'all', 'name' => 'SEMUA PEGAWAI', 'kode_pegawai' => '-'];
             
-            return view('kepegawaian.absensi_report', compact('tab', 'reportData', 'month', 'year', 'targetUser', 'counts', 'allUsers', 'targetUserId'));
+            return view('kepegawaian.absensi_report', compact('tab', 'reportData', 'month', 'year', 'targetUser', 'counts', 'allUsers', 'targetUserId', 'periodeLabel'));
         }
 
         // SINGLE USER REPORT
         $targetUser = User::findOrFail($targetUserId);
         
         if ($tab === 'harian') {
-            $daysInMonth = Carbon::create($year, $month, 1)->daysInMonth;
             $harianData = [];
             
             $devicesJson = Setting::get('fingerspot_devices');
@@ -264,18 +268,18 @@ class AttendanceController extends Controller
             $defaultLocation = $devices[0]['name'] ?? 'Solution X105';
 
             $absensis = Absensi::where('user_id', $targetUserId)
-                ->whereMonth('tgl', $month)
-                ->whereYear('tgl', $year)
+                ->whereBetween('tgl', [$startDate->toDateString(), $endDate->toDateString()])
                 ->get()
                 ->keyBy(fn($item) => Carbon::parse($item->tgl)->format('Y-m-d'));
 
-            $maxDay = ($month == date('n') && $year == date('Y')) ? date('j') : $daysInMonth;
-            for ($d = 1; $d <= $maxDay; $d++) {
-                $carbonDate = Carbon::create($year, $month, $d);
-                $dateString = $carbonDate->format('Y-m-d');
+            $currentDate = $startDate->copy();
+            $periodEndDate = $endDate->greaterThan(now()) ? now() : $endDate;
+
+            while ($currentDate->lessThanOrEqualTo($periodEndDate)) {
+                $dateString = $currentDate->format('Y-m-d');
                 $abs = $absensis->get($dateString);
                 
-                $isWeekend = $carbonDate->isWeekend();
+                $isWeekend = $currentDate->isWeekend();
                 $status = $abs ? $abs->status_kehadiran : ($isWeekend ? 'Libur Weekend' : 'Alpha');
 
                 if (!$isWeekend || $abs) {
@@ -289,6 +293,7 @@ class AttendanceController extends Controller
                         'keterangan' => $abs ? $abs->keterangan : '',
                     ];
                 }
+                $currentDate->addDay();
             }
 
             $counts = [
@@ -297,7 +302,7 @@ class AttendanceController extends Controller
             ];
             $counts['total'] = $counts['hadir'] + $counts['alpha'];
 
-            return view('kepegawaian.absensi_report', compact('tab', 'harianData', 'month', 'year', 'targetUser', 'counts', 'allUsers', 'targetUserId'));
+            return view('kepegawaian.absensi_report', compact('tab', 'harianData', 'month', 'year', 'targetUser', 'counts', 'allUsers', 'targetUserId', 'periodeLabel'));
         }
 
         // Bulanan Logic for individual
@@ -337,7 +342,7 @@ class AttendanceController extends Controller
         }
         $counts['total'] = $counts['hadir'] + $counts['alpha'];
 
-        return view('kepegawaian.absensi_report', compact('tab', 'bulananData', 'month', 'year', 'targetUser', 'counts', 'allUsers', 'targetUserId'));
+        return view('kepegawaian.absensi_report', compact('tab', 'bulananData', 'month', 'year', 'targetUser', 'counts', 'allUsers', 'targetUserId', 'periodeLabel'));
     }
 
     /**
@@ -550,10 +555,12 @@ class AttendanceController extends Controller
         $year = (int) $request->get('year', date('Y'));
         $targetUserId = $request->get('user_id');
 
+        $startDate = Carbon::create($year, $month, 11)->subMonth()->startOfDay();
+        $endDate = Carbon::create($year, $month, 10)->endOfDay();
+
         $query = Absensi::with('user')
-            ->whereMonth('tgl', $month)
-            ->whereYear('tgl', $year)
-            ->whereHas('user', fn($q) => $q->where('id_role', '!=', 4));
+            ->whereBetween('tgl', [$startDate->toDateString(), $endDate->toDateString()])
+            ->whereHas('user', fn($q) => $q->where('id_role', '!=', 4)->where('name', 'not like', '%facrozi%')->where('name', 'not like', '%fachrozi%'));
 
         if ($targetUserId && $targetUserId !== 'all') {
             $query->where('user_id', $targetUserId);
@@ -596,6 +603,111 @@ class AttendanceController extends Controller
     }
 
     /**
+     * Export ke PDF
+     */
+    public function exportPdf(Request $request)
+    {
+        if (Auth::user()->id_role != 1) {
+            abort(403);
+        }
+
+        $month = (int) $request->get('month', date('n'));
+        $year = (int) $request->get('year', date('Y'));
+        $targetUserId = $request->get('user_id');
+
+        $startDate = Carbon::create($year, $month, 11)->subMonth()->startOfDay();
+        $endDate = Carbon::create($year, $month, 10)->endOfDay();
+        $periodeLabel = $startDate->translatedFormat('d F Y') . ' s/d ' . $endDate->translatedFormat('d F Y');
+
+        if ($targetUserId && $targetUserId !== 'all') {
+            $allUsers = User::where('id', $targetUserId)->get();
+        } else {
+            $allUsers = User::where('id_role', '!=', 4)
+                ->where('name', 'not like', '%facrozi%')
+                ->where('name', 'not like', '%fachrozi%')
+                ->orderBy('name')
+                ->get();
+        }
+
+        $reportData = [];
+        $batasMasukStr = Setting::get('absensi_batas_masuk', '08:00:00');
+        $batasMasukTime = Carbon::parse($batasMasukStr);
+
+        foreach ($allUsers as $u) {
+            $uAbsensis = Absensi::where('user_id', $u->id)
+                ->whereBetween('tgl', [$startDate->toDateString(), $endDate->toDateString()])
+                ->get();
+            
+            $hadir = $uAbsensis->whereIn('status_kehadiran', ['Hadir', 'Terlambat', 'Pulang Lebih Awal', 'Terlambat & Pulang Awal'])->count();
+            
+            $workDays = 0;
+            $currentDate = $startDate->copy();
+            $periodEndDate = $endDate->greaterThan(now()) ? now() : $endDate;
+
+            while ($currentDate->lessThanOrEqualTo($periodEndDate)) {
+                if (!$currentDate->isWeekend()) {
+                    $workDays++;
+                }
+                $currentDate->addDay();
+            }
+            
+            $alpha = max(0, $workDays - $hadir);
+
+            $totalWorkingHours = 0;
+            $totalLateMinutes = 0;
+
+            foreach ($uAbsensis as $abs) {
+                if ($abs->jam_masuk && $abs->jam_pulang) {
+                    try {
+                        $masuk = Carbon::parse($abs->jam_masuk);
+                        $pulang = Carbon::parse($abs->jam_pulang);
+                        if ($pulang->greaterThan($masuk)) {
+                            $totalWorkingHours += $pulang->diffInMinutes($masuk, true) / 60;
+                        }
+                    } catch (\Exception $e) {
+                        Log::error("Error parsing attendance times for user {$u->id}: " . $e->getMessage());
+                    }
+                }
+
+                if ($abs->jam_masuk) {
+                    try {
+                        $masuk = Carbon::parse($abs->jam_masuk);
+                        if ($masuk->greaterThan($batasMasukTime)) {
+                            $totalLateMinutes += $masuk->diffInMinutes($batasMasukTime, true);
+                        }
+                    } catch (\Exception $e) {
+                        Log::error("Error parsing late hours for user {$u->id}: " . $e->getMessage());
+                    }
+                }
+            }
+            $totalWorkingHours = (int) round($totalWorkingHours);
+            $totalLateHours = (int) round($totalLateMinutes / 60);
+
+            $reportData[] = [
+                'user' => $u,
+                'hadir' => $hadir,
+                'alpha' => $alpha,
+                'jam_telat' => $totalLateHours,
+                'total_jam_kerja' => $totalWorkingHours
+            ];
+        }
+
+        $monthNames = [
+            1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
+            5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
+            9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember'
+        ];
+        $monthName = $monthNames[$month] ?? Carbon::create()->month($month)->translatedFormat('F');
+        $reportDate = now()->translatedFormat('d F Y');
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('kepegawaian.absensi_pdf', compact('reportData', 'monthName', 'year', 'reportDate', 'periodeLabel'))
+            ->setOption('isRemoteEnabled', true);
+
+        $fileName = "Rekap_Kehadiran_" . str_replace(' ', '_', $monthName) . "_{$year}.pdf";
+        return $pdf->download($fileName);
+    }
+
+    /**
      * Kirim Rekap Absensi Manual via WhatsApp (Trigger dari UI)
      */
     public function sendRekapManual(\Illuminate\Http\Request $request)
@@ -621,10 +733,18 @@ class AttendanceController extends Controller
                 9=>'September',10=>'Oktober',11=>'November',12=>'Desember'
             ];
 
-            return back()->with('success', "✅ Rekap absensi periode *{$monthNames[$month]} {$year}* berhasil dipicu dan dikirim ke WhatsApp!");
+            return redirect()->route('absensi.index', [
+                'tab' => 'laporan',
+                'month' => $month,
+                'year' => $year
+            ])->with('success', "✅ Rekap absensi periode *{$monthNames[$month]} {$year}* berhasil dipicu dan dikirim ke WhatsApp!");
         } catch (\Exception $e) {
             Log::error("sendRekapManual Error: " . $e->getMessage());
-            return back()->with('error', 'Gagal mengirim rekap: ' . $e->getMessage());
+            return redirect()->route('absensi.index', [
+                'tab' => 'laporan',
+                'month' => $month,
+                'year' => $year
+            ])->with('error', 'Gagal mengirim rekap: ' . $e->getMessage());
         }
     }
 }

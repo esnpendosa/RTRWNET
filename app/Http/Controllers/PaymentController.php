@@ -155,7 +155,7 @@ class PaymentController extends Controller
             // Re-enable Mikrotik Service
             $success = $this->mikrotikService->setSecretStatus($pelanggan->router, $pelanggan->mikrotik_username ?: $pelanggan->kode_pelanggan, $pelanggan->mikrotik_type, false, $pelanggan->ip_address);
             if ($success) {
-                $pelanggan->update(['is_active' => true]);
+                $pelanggan->update(['is_active' => true, 'is_isolated' => false]);
             }
         }
 

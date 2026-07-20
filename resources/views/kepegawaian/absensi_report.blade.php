@@ -11,7 +11,10 @@
             </div>
             <div class="card-body p-4 p-md-5">
                 <h4 class="card-title text-white mb-2 fw-bold"><i class="bx bx-chart me-2"></i> REKAPITULASI & LAPORAN ABSENSI</h4>
-                <p class="mb-0 text-white-50">Kelola riwayat kehadiran karyawan, cetak rekapitulasi bulanan, import CSV, dan buat koreksi manual.</p>
+                <p class="mb-3 text-white-50">Kelola riwayat kehadiran karyawan, cetak rekapitulasi bulanan, import CSV, dan buat koreksi manual.</p>
+                <div class="d-inline-flex align-items-center bg-white bg-opacity-20 backdrop-blur text-white fw-bold px-3 py-2 rounded-pill" style="font-size: 0.85rem; border: 1px solid rgba(255,255,255,0.3);">
+                    <i class="bx bx-calendar me-2"></i> Periode: {{ $periodeLabel ?? '-' }}
+                </div>
             </div>
         </div>
     </div>
@@ -81,6 +84,9 @@
     </button>
     <a href="{{ route('absensi.export', ['user_id' => $targetUserId, 'month' => $month, 'year' => $year]) }}" class="btn btn-outline-indigo rounded-pill px-4 fw-bold bg-white">
         <i class="bx bx-download me-1"></i> Ekspor CSV
+    </a>
+    <a href="{{ route('absensi.pdf', ['user_id' => $targetUserId, 'month' => $month, 'year' => $year]) }}" class="btn btn-outline-danger rounded-pill px-4 fw-bold bg-white">
+        <i class="bx bxs-file-pdf me-1"></i> Cetak PDF
     </a>
     <form action="{{ route('absensi.send-rekap') }}" method="POST" class="d-inline">
         @csrf

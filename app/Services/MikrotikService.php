@@ -580,95 +580,119 @@ class MikrotikService
                     $found = true;
                 }
             } elseif ($type === 'static') {
-                // Simple Queue TIDAK disentuh — hanya pakai Firewall (ISOLIR list + filter rule)
-                // Ini mencegah konflik/tumpang tindih jika queue sudah dikonfigurasi manual di router
+                // ============================================================
+                // ISOLIR untuk Static IP: menggunakan Address-List + Global Rule
+                // Cara kerja yang benar di MikroTik:
+                //   1. Tambah/hapus IP dari address-list "ISOLIR"
+                //   2. Pastikan ada SATU global rule permanen yang drop semua
+                //      traffic dari address-list "ISOLIR" (bukan per-IP rule)
+                //   3. Hapus per-IP rule lama (penyebab duplikasi)
+                //   4. Kick ARP entry agar koneksi langsung terputus
+                // ============================================================
 
-                // 2. Update Address List (Block Traffic via Firewall)
+                // Step 1: Kelola Address-List ISOLIR
                 if ($ip) {
                     $listName = 'ISOLIR';
-
-                    // Tarik semua entri address-list lalu filter di PHP (lebih andal)
                     $addrQuery = new Query('/ip/firewall/address-list/print');
+                    $addrQuery->where('list', $listName);
                     $allAddrs = $client->query($addrQuery)->read();
 
-                    $matchedAddrs = [];
+                    $matchedEntry = null;
                     if (is_array($allAddrs)) {
                         foreach ($allAddrs as $addr) {
-                            if (!is_array($addr)) continue;
-                            $addrIp      = $addr['address'] ?? '';
-                            $addrList    = $addr['list']    ?? '';
-                            $addrComment = $addr['comment'] ?? '';
-
-                            if ($addrList === $listName) {
-                                $ipMatch      = ($addrIp === $ip || $addrIp === $ip . '/32');
-                                $commentMatch = (strpos(strtolower($addrComment), strtolower($username)) !== false);
-                                if ($ipMatch || $commentMatch) {
-                                    $matchedAddrs[] = $addr;
-                                }
+                            if (($addr['address'] ?? '') === $ip) {
+                                $matchedEntry = $addr;
+                                break;
                             }
                         }
                     }
 
                     if ($disable) {
-                        // Isolir: tambahkan ke list jika belum ada
-                        if (empty($matchedAddrs)) {
-                            $addQuery = (new Query('/ip/firewall/address-list/add'))
+                        // Tambahkan ke ISOLIR list jika belum ada
+                        if (!$matchedEntry) {
+                            $client->query((new Query('/ip/firewall/address-list/add'))
                                 ->equal('address', $ip)
                                 ->equal('list', $listName)
-                                ->equal('comment', 'ISOLIR OTOMATIS: ' . $username);
-                            $client->query($addQuery)->read();
+                                ->equal('comment', $username))->read();
                         }
                     } else {
-                        // Aktifkan: hapus SEMUA entri yang cocok dari list
-                        foreach ($matchedAddrs as $addr) {
-                            if (isset($addr['.id'])) {
-                                $remQuery = (new Query('/ip/firewall/address-list/remove'))
-                                    ->equal('.id', $addr['.id']);
-                                $client->query($remQuery)->read();
-                            }
+                        // Hapus dari ISOLIR list (aktifkan kembali)
+                        if ($matchedEntry) {
+                            $client->query((new Query('/ip/firewall/address-list/remove'))
+                                ->equal('.id', $matchedEntry['.id']))->read();
                         }
                     }
                     $found = true;
                 }
 
-                // 3. Update Firewall Filter Rule (Menggunakan delete-and-recreate dengan src-address agar blokir 100% aktif & stabil)
+                // Step 2: Pastikan ada GLOBAL drop rule untuk address-list ISOLIR
+                //         Hapus per-IP rule lama yang bisa menyebabkan duplikasi
                 $filterPath = '/ip/firewall/filter';
-                $filterQuery = new Query($filterPath . '/print');
-                $filterResp  = $client->query($filterQuery)->read();
+                $filterResp = $client->query(new Query($filterPath . '/print'))->read();
+                $hasGlobalIsolirForward = false;
 
                 if (is_array($filterResp)) {
                     foreach ($filterResp as $filter) {
                         if (!is_array($filter)) continue;
-                        $fChain   = $filter['chain']       ?? '';
-                        $fAction  = $filter['action']      ?? '';
-                        $fComment = $filter['comment']     ?? '';
-                        $fDst     = $filter['dst-address'] ?? '';
-                        $fSrc     = $filter['src-address'] ?? '';
+                        $fChain   = $filter['chain']             ?? '';
+                        $fAction  = $filter['action']            ?? '';
+                        $fSrcList = $filter['src-address-list']  ?? '';
+                        $fSrc     = $filter['src-address']       ?? '';
+                        $fComment = $filter['comment']           ?? '';
 
-                        if ($fChain === 'forward' && $fAction === 'drop') {
-                            $commentMatch = (strtolower(trim($fComment)) === strtolower(trim($username)));
-                            $ipMatch      = ($ip && (strpos($fDst, $ip) !== false || strpos($fSrc, $ip) !== false));
-
-                            if ($commentMatch || $ipMatch) {
-                                // Hapus rule lama
-                                $client->query((new Query($filterPath . '/remove'))->equal('.id', $filter['.id']))->read();
+                        // Hapus per-IP drop rule lama (penyebab duplikasi di foto)
+                        if ($fChain === 'forward' && $fAction === 'drop' && empty($fSrcList) && $ip) {
+                            if (strpos($fSrc, $ip) !== false ||
+                                strtolower(trim($fComment)) === strtolower(trim($username ?? ''))) {
+                                $client->query((new Query($filterPath . '/remove'))
+                                    ->equal('.id', $filter['.id']))->read();
+                                continue;
                             }
+                        }
+
+                        // Cek apakah global ISOLIR rule sudah ada
+                        if ($fChain === 'forward' && $fAction === 'drop' && $fSrcList === 'ISOLIR') {
+                            $hasGlobalIsolirForward = true;
                         }
                     }
                 }
 
-                // Jika status isolir (disable = true), buat rule drop baru menggunakan src-address di paling atas (place-before = 0)
-                if ($disable && $ip) {
-                    $addFilterQuery = (new Query($filterPath . '/add'))
+                // Buat global rule sekali jika belum ada
+                if (!$hasGlobalIsolirForward) {
+                    $client->query((new Query($filterPath . '/add'))
                         ->equal('chain', 'forward')
                         ->equal('action', 'drop')
-                        ->equal('src-address', $ip)
-                        ->equal('comment', $username)
+                        ->equal('src-address-list', 'ISOLIR')
+                        ->equal('comment', 'ISOLIR-GLOBAL: Drop isolir pelanggan')
                         ->equal('disabled', 'no')
-                        ->equal('place-before', '0');
-                    $client->query($addFilterQuery)->read();
+                        ->equal('place-before', '0')
+                    )->read();
+                    \Log::info("Mikrotik: Global ISOLIR rule dibuat di router {$router->nama_router}");
                 }
-                $found = true;
+
+                // Step 3: Kick ARP entry agar koneksi langsung terputus (untuk static IP)
+                if ($disable && $ip) {
+                    try {
+                        $arpQuery = new Query('/ip/arp/print');
+                        $arpQuery->where('address', $ip);
+                        $arpResp = $client->query($arpQuery)->read();
+                        if (is_array($arpResp)) {
+                            foreach ($arpResp as $arpEntry) {
+                                if (isset($arpEntry['.id'])) {
+                                    $client->query((new Query('/ip/arp/remove'))
+                                        ->equal('.id', $arpEntry['.id']))->read();
+                                }
+                            }
+                        }
+                    } catch (\Exception $arpEx) {
+                        \Log::warning("Mikrotik: Gagal hapus ARP {$ip}: " . $arpEx->getMessage());
+                    }
+                }
+
+                if (!$ip) {
+                    \Log::warning("Mikrotik setSecretStatus: Pelanggan {$username} static tidak punya IP, isolir address-list dilewati.");
+                }
+                $found = true; // static selalu dianggap ditemukan (dikelola via address-list)
             }
 
             if (!$found) {

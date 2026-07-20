@@ -298,9 +298,6 @@ Route::middleware(['auth'])->group(function () {
     // Kepegawaian & Absensi Pegawai
     Route::get('absensi', [\App\Http\Controllers\AttendanceController::class, 'index'])->name('absensi.index');
     Route::get('absensi/today', [\App\Http\Controllers\AttendanceController::class, 'today'])->name('absensi.today');
-    Route::get('absensi/send-rekap', function() {
-        return redirect()->route('absensi.index');
-    });
     
     Route::middleware('can:user_manage')->group(function() {
         Route::get('absensi/settings', [\App\Http\Controllers\AttendanceController::class, 'showSettings'])->name('absensi.settings');
@@ -308,6 +305,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('absensi/manual', [\App\Http\Controllers\AttendanceController::class, 'storeManual'])->name('absensi.store-manual');
         Route::post('absensi/import', [\App\Http\Controllers\AttendanceController::class, 'importCsv'])->name('absensi.import');
         Route::get('absensi/export', [\App\Http\Controllers\AttendanceController::class, 'exportExcel'])->name('absensi.export');
+        Route::get('absensi/pdf', [\App\Http\Controllers\AttendanceController::class, 'exportPdf'])->name('absensi.pdf');
         Route::delete('absensi/{id}', [\App\Http\Controllers\AttendanceController::class, 'destroy'])->name('absensi.destroy');
         // Kirim rekap absensi manual via WA
         Route::post('absensi/send-rekap', [\App\Http\Controllers\AttendanceController::class, 'sendRekapManual'])->name('absensi.send-rekap');

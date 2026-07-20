@@ -6,6 +6,73 @@
 > **Fokus**: Web GIS, Integrasi AI, KNN & Optimasi Jaringan  
 > **Repository**: https://github.com/esnpendosa/RTRWNET
 
+## 📱 REST API Integration (Flutter Mobile) ✅ (Terbaru)
+
+Aplikasi ini sekarang dilengkapi dengan REST API berbasis **Laravel Sanctum** untuk mendukung integrasi dengan Flutter Mobile App.
+
+### 🔑 Autentikasi & Header
+Seluruh endpoint (kecuali Login) dilindungi oleh middleware `auth:sanctum` dan memerlukan header berikut pada setiap HTTP request:
+```http
+Accept: application/json
+Authorization: Bearer <your_access_token>
+```
+
+### ⏱️ Rate Limiting & Keamanan
+*   **Rate Limit**: Maksimal 60 request per menit per token/IP.
+*   **CORS**: Terkonfigurasi untuk mengizinkan akses penuh dari aplikasi Flutter (`config/cors.php`).
+
+---
+
+### 📂 Daftar API Endpoint
+
+#### 1. Autentikasi
+*   `POST /api/auth/login` — Login pengguna (mengirim `username` atau `email` + `password`). Mengembalikan token akses.
+*   `POST /api/auth/logout` — Logout pengguna (merevokasi token saat ini).
+*   `GET /api/auth/me` — Mendapatkan profil pengguna yang sedang login.
+
+#### 2. Pelanggan
+*   `GET /api/pelanggan` — Mendapatkan daftar semua pelanggan.
+    *   *Query Parameters*: `search` (cari nama/no_wa/kode), `status` (`aktif`/`isolir`), `per_page` (paginasi).
+*   `GET /api/pelanggan/{id}` — Detail lengkap pelanggan beserta koordinat GPS.
+*   `GET /api/pelanggan/{id}/tagihan` — Riwayat seluruh tagihan pelanggan tertentu.
+*   `GET /api/pelanggan/{id}/tagihan/aktif` — Tagihan bulan berjalan/belum lunas terdekat.
+
+#### 3. Tagihan & Pembayaran
+*   `GET /api/tagihan` — Semua data tagihan.
+    *   *Query Parameters*: `status` (`paid`/`unpaid`), `bulan` (1-12), `tahun` (YYYY).
+*   `GET /api/tagihan/jatuh-tempo-hari-ini` — Tagihan yang jatuh tempo hari ini untuk trigger push notification di Flutter.
+    *   *Query Parameters*: `day` (opsional untuk simulasi hari), `force=true` (untuk override).
+*   `PATCH /api/tagihan/{id}/tandai-lunas` — Mengonfirmasi pelunasan tagihan secara manual (otomatis mengaktifkan status pelanggan di DB & sinkronisasi PPPoE/Hotspot secret di MikroTik).
+*   `GET /api/tagihan/statistik` — Statistik keuangan (total pendapatan bulan berjalan, total tunggakan, rasio pelunasan).
+
+#### 4. Dashboard & GIS (Peta)
+*   `GET /api/dashboard` — Ringkasan dashboard: total pelanggan aktif, total pendapatan, jumlah tagihan jatuh tempo, dan pendaftaran baru.
+*   `GET /api/peta/pelanggan` — Mendapatkan seluruh koordinat Latitude & Longitude pelanggan untuk penandaan marker pada Google Maps/Flutter Maps.
+
+---
+
+### 📄 Standardisasi Response JSON
+
+#### Response Sukses (HTTP 200/201)
+```json
+{
+  "status": true,
+  "message": "Berhasil",
+  "data": { ... },
+  "meta": { "current_page": 1, "total": 100 } // Ada jika response menggunakan paginasi
+}
+```
+
+#### Response Error (HTTP 400/401/403/422)
+```json
+{
+  "status": false,
+  "message": "Pesan deskripsi error",
+  "errors": { ... } // Opsional, berisi daftar error validasi jika HTTP 422
+}
+```
+
+---
 
 ## 📋 Daftar Isi
 
@@ -38,13 +105,11 @@
 
 ## ✨ Fitur Utama
 
-### 1. 💰 Billing & Pembayaran
+### 1. 💰 Billing & OCR Automation
 - **Smart OCR**: Verifikasi bukti transfer otomatis via Tesseract.js dengan fuzzy matching nominal & tanggal
-- **Edit Bukti Bayar**: Upload ulang/ganti foto bukti pembayaran setelah dikonfirmasi (baru)
 - **PDF Receipt**: Nota pembayaran otomatis dikirim ke WhatsApp pelanggan
 - **Isolir Otomatis**: Sinkronisasi real-time dengan Mikrotik (putus/aktif berdasarkan status bayar)
 - **Flexible Billing**: Siklus tagihan dinamis (Tanggal 1–28) sesuai tanggal instalasi
-- **Pagination**: Halaman billing dipaginasi (50 per halaman) untuk performa lebih cepat
 
 ### 2. 🤖 WhatsApp AI Bot (R-Care)
 - **Self-Service**: Pelanggan cek tagihan, lapor gangguan, dan konfirmasi bayar via chat
@@ -93,7 +158,7 @@ Pastikan perangkat memenuhi persyaratan berikut sebelum instalasi:
 
 | Software | Versi Minimum | Keterangan |
 |---|---|---|
-| **PHP** | 8.2+ | Ekstensi: `mbstring`, `openssl`, `pdo`, `tokenizer`, `xml`, `gd`, `fileinfo` (opsional) |
+| **PHP** | 8.2+ | Ekstensi: `mbstring`, `openssl`, `pdo`, `tokenizer`, `xml`, `gd` |
 | **Composer** | 2.x | Dependency manager PHP |
 | **Node.js** | 18.x LTS | Untuk WhatsApp Bot & Vite |
 | **NPM** | 9.x+ | Otomatis terinstal bersama Node.js |
@@ -532,75 +597,36 @@ npm run build
 
 ---
 
-### ❌ Notif Absen / Nota WhatsApp Timeout Lambat
-
-**Gejala**: Setiap scan fingerprint / verifikasi bayar terasa lambat, log penuh `cURL error 28: Operation timed out`.
-
-**Penyebab**: Bot WhatsApp (`http://127.0.0.1:3000`) tidak jalan.
-
-**Solusi**:
-```bash
-# Cek status bot
-pm2 status
-
-# Jika stopped, jalankan ulang
-pm2 restart whatsapp-bot
-
-# Cek log bot
-pm2 logs whatsapp-bot --lines 50
-```
-
-> **Catatan desain**: Timeout `sendMessage` sengaja diperkecil ke **5 detik** dan semua pengiriman pakai `async=true`. Jika bot mati, proses fingerprint & verifikasi tetap berjalan normal — notif hanya tidak terkirim.
-
----
-
-### ❌ Error "php_fileinfo extension" saat Upload Bukti Bayar
-
-**Gejala**: `Unable to guess the MIME type as no guessers are available`.
-
-**Penyebab**: Extension `php_fileinfo` tidak aktif di server.
-
-**Solusi A — Aktifkan extension (direkomendasikan)**:
-1. Buka `php.ini` (lokasi: jalankan `php --ini`)
-2. Cari dan uncomment baris: `;extension=fileinfo` → `extension=fileinfo`
-3. Restart PHP/web server
-
-**Solusi B — Sudah ditangani di kode**: Validasi upload bukti bayar menggunakan extension check manual (`getClientOriginalExtension()`) sehingga **tidak memerlukan fileinfo** — hanya perlu restart server jika pernah ada error ini di log lama.
-
----
-
 ## 📁 Struktur Direktori
 
 ```
 skripsi/
 ├── app/
 │   ├── Console/Commands/       # Scheduled tasks (billing, reminder, isolir)
-│   ├── Http/Controllers/       # Controller Laravel
-│   │   ├── Api/                # REST API controllers (Sanctum auth)
-│   │   │   └── TagihanController.php  # + editBuktiBayar() endpoint baru
-│   │   ├── TagihanController.php      # + showEditBuktiBayar(), editBuktiBayar()
-│   │   └── AttendanceController.php   # Fingerprint ADMS handler
+│   ├── Http/Controllers/       # Controller Laravel (Pelanggan, Tagihan, KNN, dll.)
 │   ├── Models/                 # Model Eloquent (Pelanggan, Tagihan, dll.)
-│   └── Services/
-│       ├── WhatsappClient.php  # WA client — timeout 5s, selalu async
-│       ├── FingerprintService.php  # Absensi — notif masuk/pulang + durasi kerja
-│       └── MikrotikService.php # Koneksi RouterOS API
+│   └── Services/               # Service class (Mikrotik, WhatsApp, KNN, dll.)
 ├── database/
 │   ├── migrations/             # Skema database (buat/ubah tabel)
 │   └── seeders/                # Data awal (akun admin, dll.)
-├── resources/views/content/
-│   └── billing/
-│       ├── index.blade.php     # Daftar tagihan (pagination 50/halaman)
-│       └── edit-bukti-bayar.blade.php  # Form edit foto bukti (baru)
+├── public/                     # Aset publik (CSS, JS, gambar)
+├── resources/
+│   ├── menu/                   # Konfigurasi menu sidebar
+│   └── views/                  # Template Blade (halaman web)
+│       └── content/
+│           ├── knn/            # Halaman klasifikasi Naive Bayes
+│           └── pelanggan/      # Halaman manajemen pelanggan
 ├── routes/
-│   ├── web.php                 # Web routes — termasuk GET+PUT edit-bukti-bayar
-│   └── api.php                 # API routes — POST edit-bukti-bayar
+│   └── web.php                 # Definisi semua route/URL sistem
 ├── whatsapp-bot/               # WhatsApp Bot (Node.js, terpisah dari Laravel)
-│   ├── index.js                # Entry point bot
-│   ├── sessions/               # Data sesi WA (auto-generated, tidak di-commit)
-│   └── .env.example
-├── .env.example
-└── README.md
+│   ├── index.js                # Entry point bot — logika utama
+│   ├── sessions/               # Data sesi WhatsApp (auto-generated, tidak di-commit)
+│   ├── .env.example            # Contoh konfigurasi bot
+│   └── package.json            # Dependensi Node.js
+├── .env.example                # Contoh konfigurasi Laravel
+├── composer.json               # Dependensi PHP
+├── package.json                # Dependensi frontend (Vite)
+└── README.md                   # Dokumentasi ini
 ```
 
 ## 📱 REST API Integration (Flutter Mobile) ✅ (Terbaru)
@@ -637,12 +663,10 @@ Authorization: Bearer <your_access_token>
 #### 3. Tagihan & Pembayaran
 *   `GET /api/tagihan` — Semua data tagihan.
     *   *Query Parameters*: `status` (`paid`/`unpaid`), `bulan` (1-12), `tahun` (YYYY).
-*   `GET /api/tagihan/jatuh-tempo-hari-ini` — Tagihan yang jatuh tempo hari ini.
+*   `GET /api/tagihan/jatuh-tempo-hari-ini` — Tagihan yang jatuh tempo hari ini untuk trigger push notification di Flutter.
     *   *Query Parameters*: `day` (opsional untuk simulasi hari), `force=true` (untuk override).
-*   `PATCH /api/tagihan/{id}/tandai-lunas` — Konfirmasi pelunasan tagihan (sinkronisasi PPPoE/Hotspot MikroTik).
-*   `POST /api/tagihan/{id}/edit-bukti-bayar` — Upload/ganti foto bukti pembayaran. *(Baru)*
-    *   *Form Data*: `bukti_bayar` (file: jpg/png/gif/pdf, max 3MB), `metode_pembayaran` (opsional), `verify_payment` (1 = langsung tandai lunas, khusus admin).
-*   `GET /api/tagihan/statistik` — Statistik keuangan (pendapatan bulan berjalan, tunggakan, rasio pelunasan).
+*   `PATCH /api/tagihan/{id}/tandai-lunas` — Mengonfirmasi pelunasan tagihan secara manual (otomatis mengaktifkan status pelanggan di DB & sinkronisasi PPPoE/Hotspot secret di MikroTik).
+*   `GET /api/tagihan/statistik` — Statistik keuangan (total pendapatan bulan berjalan, total tunggakan, rasio pelunasan).
 
 #### 4. Dashboard, Laporan & GIS (Peta)
 *   `GET /api/dashboard` — Ringkasan dashboard: total pelanggan aktif, total pendapatan, jumlah tagihan jatuh tempo, dan pendaftaran baru.

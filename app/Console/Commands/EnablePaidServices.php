@@ -28,9 +28,9 @@ class EnablePaidServices extends Command
         $currentMonth = now()->month;
         $currentYear = now()->year;
 
-        // Cari pelanggan yang tidak aktif tapi sudah tidak punya tunggakan lagi (bulan ini atau sebelumnya)
-        // Dan pastikan mereka memang memiliki tagihan aktif bulan ini (tidak dinonaktifkan secara manual/permanen tanpa tagihan)
-        $paidPelanggan = \App\Models\Pelanggan::where('is_active', false)
+        // Cari pelanggan yang terisolir tapi sudah tidak punya tunggakan lagi (bulan ini atau sebelumnya)
+        // Dan pastikan mereka memang memiliki tagihan aktif bulan ini
+        $paidPelanggan = \App\Models\Pelanggan::where('is_isolated', true)
             ->whereHas('tagihan', function ($query) use ($currentMonth, $currentYear) {
                 $query->where('tahun', $currentYear)
                       ->where('bulan', $currentMonth);
@@ -56,8 +56,8 @@ class EnablePaidServices extends Command
         foreach ($paidPelanggan as $p) {
             $username = $p->mikrotik_username ?: $p->kode_pelanggan;
 
-            // Selalu tandai aktif di DB terlebih dahulu — pelanggan sudah lunas
-            $p->update(['is_active' => true]);
+            // Selalu tandai aktif dan hilangkan status terisolir di DB terlebih dahulu
+            $p->update(['is_active' => true, 'is_isolated' => false]);
 
             if ($p->router && $username) {
                 $this->info("Sinkronisasi MikroTik untuk: {$p->nama_pelanggan} ({$username})");

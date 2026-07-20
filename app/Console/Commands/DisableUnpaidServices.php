@@ -71,7 +71,7 @@ class DisableUnpaidServices extends Command
                 $success = $mikrotikService->setSecretStatus($p->router, $username, $p->mikrotik_type, true, $p->ip_address);
 
                 if ($success) {
-                    $p->update(['is_active' => false]);
+                    $p->update(['is_active' => false, 'is_isolated' => true]);
                     $this->info("Berhasil dinonaktifkan.");
 
                     // Kirim notifikasi WA

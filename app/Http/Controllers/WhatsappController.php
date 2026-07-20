@@ -40,6 +40,18 @@ class WhatsappController extends Controller
         $phoneNumber = explode('@', $sender)[0];
         $cleanPhone = substr($phoneNumber, -10);
 
+        // Check if customer is manually deactivated
+        $cleanNumForCheck = preg_replace('/[^0-9]/', '', $phoneNumber);
+        if (!empty($cleanNumForCheck)) {
+            $customer = \App\Models\Pelanggan::where('no_wa', 'like', '%' . $cleanNumForCheck . '%')
+                ->orWhere('no_wa', 'like', '%' . substr($cleanNumForCheck, 2) . '%')
+                ->first();
+            if ($customer && !$customer->is_active && !$customer->is_isolated) {
+                Log::info("WhatsappController Webhook: Ignoring message from manually deactivated customer: {$customer->nama_pelanggan} ({$phoneNumber})");
+                return response()->json(['status' => 'ignored_manually_deactivated_customer']);
+            }
+        }
+
         // Auto-update BotResponse ID 6 response text to include the new instruction
         $laporResponse = \App\Models\BotResponse::find(6);
         if ($laporResponse && !str_contains($laporResponse->response, 'TROUBLE KODE_PELANGGAN')) {
